@@ -1,0 +1,39 @@
+cm_content_bird_connector.create:
+    path: /contentbird/content/create
+    defaults: { _controller: cmcontentbirdconnector.controller_api:createAction }
+    methods: [POST]
+
+cm_content_bird_connector.update:
+    path: /contentbird/content/update
+    defaults: { _controller: cmcontentbirdconnector.controller_api:contentUpdateAction }
+    methods: [POST]
+
+cm_content_bird_conenctor.getContent:
+    path: /contentbird/content/get
+    defaults: { _controller: cmcontentbirdconnector.controller_api:getContentAction }
+    methods: [GET]
+
+cm_content_bird_connector.meta:
+    path: /contentbird/meta
+    defaults: { _controller: cmcontentbirdconnector.controller_api:metaAction }
+    methods: [GET]
+
+cm_content_bird_connector.users:
+    path: /contentbird/users
+    defaults: { _controller: cmcontentbirdconnector.controller_api:usersAction }
+    methods: [GET]
+
+cm_content_bird_connector.status:
+    path: /contentbird/plugin/status
+    defaults: { _controller: cmcontentbirdconnector.controller_api:statusAction }
+    methods: [GET]
+
+cm_content_bord_connector.handle:
+    path: /contentbird/
+    defaults: {_controller: cmcontentbirdconnector.controller_api:handleAction }
+    methods: [GET, POST]
+
+cm_content_bord_connector.activate:
+    path: /contentbird/activate
+    defaults: {_controller: cmcontentbirdconnector.controller_api:activateAction }
+    methods: [GET]
