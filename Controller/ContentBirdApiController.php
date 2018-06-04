@@ -14,6 +14,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use eZ\Publish\API\Repository\Repository;
 use Symfony\Component\DependencyInjection\Definition;
 use eZ\Bundle\EzPublishCoreBundle\Controller;
+use eZ\Publish\Core\FieldType\Image\Value;
 
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
 
@@ -21,6 +22,10 @@ class ContentBirdApiController extends Controller {
 
 	private $apiService;
 	private $contentBirdService;
+	private $parser;
+	private $url;
+
+	const PLUGIN_VERSION = '0.2';
 
 	/** Status and error codes */
 	const STATUS_OKAY                  = 0;
@@ -44,35 +49,64 @@ class ContentBirdApiController extends Controller {
 		$this->repository = $repository;
 		$this->container = $container;
 		$this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
+		$this->parser = $this->container->get('cmcontentbirdconnector.service.parser');
 	}
 
 	public function activateAction(Request $request) {
-		// $host = $request->headers->get('x-forwarded-host') ? preg_replace('/,.*$/', '', $request->headers->get('x-forwarded-host')) : $request->getHost();
-		// $proto = $request->isSecure()? 'https://' : 'http://';
-		// $this->contentBirdService->pluginStatus($proto . $host);
-		//$this->contentBirdService->pluginStatus('http://4d99a9c8.ngrok.io');
-		$this->getContentTypes();
+		$host = $request->headers->get('x-forwarded-host') ? preg_replace('/,.*$/', '', $request->headers->get('x-forwarded-host')) : $request->getHost();
+		$proto = $request->isSecure()? 'https://' : 'http://';
+		$this->contentBirdService->pluginStatus($proto . $host);
+		$this->url = $proto . $host;
+
 		return new Response();
+	}
+
+	private function handleResponse($payload, $statusCode = null) {
+		$response = new JsonResponse();
+
+		if ($payload) {
+			$response->setData($payload);
+		}
+		if ($statusCode) {
+			$response->setStatusCode($statusCode);
+		}
+		return $response;
+	}
+
+	private function validateContentCreate($data) {
+
+        if ( empty( $data ) ) {
+			return $this->handleResponse(['message' => 'Invalid content data object', 'code' => self::ERROR_OBJECT_INVALID], 422);
+        }
+
+        if ( empty( $data['post_title'] ) ) {
+			return $this->handleResponse(['message' => 'No title given', 'code' => self::ERROR_NO_TITLE_GIVEN], 422);
+        }
+
+        if ( empty( $data['post_content'] ) ) {
+			return $this->handleResponse(['message' => 'Invalid content data object', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
+		}
+
+		return 0;
 	}
 
 	public function handleAction(Request $request) {
 
+		$errorResponse = null;
+
 		if (!$request->query->has('token')) {
-			echo "Token wurde nicht gesetzt";
-			return new Response();
+			return $this->handleResponse(['message' => 'Token wurde nicht gesetzt','code' => self::ERROR_GENERAL], 422);
 		}
 
 		if (!$request->query->has('lbcm')) {
-			echo "lbcm/Action wurde nicht gesetzt";
-			return new Response();
+			return $this->handleResponse(['message' => 'lbcm/action wurde niht gesetzt','code' => self::ERROR_GENERAL], 405);
 		}
 
 		$token = $request->query->get('token');
 		$action = $request->query->get('lbcm');
 
 		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
-			echo "Token ist nicht korrekt!!";
-			return new Response();
+			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 403);
 		}
 
 		switch($action) {
@@ -93,7 +127,7 @@ class ContentBirdApiController extends Controller {
 				return $this->getContentAction($request);
 
 			default:
-				return new Response();
+				return $this->handleResponse(['message' => 'Methode nicht gefunden', 'code' => self::ERROR_GENERAL], 404);
 		}
 	}
 
@@ -107,14 +141,13 @@ class ContentBirdApiController extends Controller {
 		}
 
 		$res = [
-			'message' => 'Plugin Status',
-			'code' => '0',
-			'version' => '1.0',
+			'message' => $inserted ? 'Plugin richtig installiert' : 'Plugin wurde nicht korrekt installiert',
+			'code' => $inserted ? self::STATUS_OKAY : self::ERROR_GENERAL,
+			'version' => self::PLUGIN_VERSION,
 			'token_inserted' => $inserted
 		];
-		$res = json_encode($res);
 
-		return new Response($res);
+		return $this->handleResponse($res, 200);
 	}
 
 	public function metaAction(Request $request) {
@@ -123,23 +156,13 @@ class ContentBirdApiController extends Controller {
 
 		$responseData = [
 			'meta_data' => [
-				'post_types' => $types,
-				'post_categories' => [
-					'A' => [
-						'name' => 'A',
-						'label' => 'A',
-						'type' => 'a',
-					]
-				]
+				'post_types' => $types
 			],
 			'message' => '',
-			'code' => '0'
+			'code' => self::STATUS_OKAY
 		];
 
-		$response = new JsonResponse();
-		$response->setData($responseData);
-
-		return $response;
+		return $this->handleResponse($responseData, 200);
     }
 
 
@@ -147,105 +170,110 @@ class ContentBirdApiController extends Controller {
 
 		$requestData = $request->request->get('content_data');
 
-		/*$check = $this->validateContentCreate($requestData);
+		$token = $request->query->get('token');
+		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
+		}
 
-		if (is_array($requestData)) {
-			return new JsonResponse(json_encode($check));
-		}*/
+		$check = $this->validateContentCreate($requestData);
 
-		$this->writeToFile(json_encode($requestData));
+		if (!is_int($check)) {
+			return $check;
+		}
 
-		$html = '';
-		$title = '';
-		$postStatus = '';
-		$meta = '';
-		$cmsUserId = '';
-		$postType = '';
+		$html;
+		$title;
+		$postStatus;
+		$meta;
+		$cmsUserId;
+		$postType;
+		$publishDate;
 
-		if ($requestData['post_title']) {
+		if ( !empty($requestData['post_title'])) {
 			$title = $requestData['post_title'];
 		}
 
-		if ($requestData['post_content']) {
+		if ( !empty($requestData['post_content'])) {
 			$html = $requestData['post_content'];
 		}
 
-		if ($requestData['post_status']) {
+		if ( !empty($requestData['post_status'])) {
 			$postStatus = $requestData['post_status'];
 		}
 
-		if ($requestData['post_meta']) {
-			if ($requestData['post_meta']['cms_user_id']) {
+		if ( !empty($requestData['post_meta'])) {
+			if ( !empty($requestData['post_meta']['cms_user_id'])) {
 				$cmsUserId = $requestData['post_meta']['cms_user_id'];
 			}
 
-			if ($requestData['post_meta']['cms_post_type']) {
+			if ( !empty($requestData['post_meta']['cms_post_type'])) {
 				$postType = $requestData['post_meta']['cms_post_type'];
 			}
 		}
 
-		$this->writeToFile($cmsUserId . "   " .  $postType);
-
+		if (empty($title) || empty($html) || empty($cmsUserId) || empty($postType)) {
+			return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
+		}
 
 		$html = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $html .  '</section>';
 
-        $content = $this->createContent($postType, $title, $html, 'publish');
+        $content = $this->createContent($postType, $title, $html, 'draft', $cmsUserId);
 
 		$res = array(
-			'code' => '0',
+			'code' => self::STATUS_OKAY,
 				array('message' => ''),
 			'cms_content_id' => $content->id
 			);
 
-		$response = new JsonResponse();
-		$response->setData($res);
-
-		return $response;
-
+		return $this->handleResponse($res, 200);
 	}
 
 	public function getContentAction(Request $request) {
 
 		$token = $request->query->get('token');
-		$cm_content_id = $request->query->get('cms_content_id');
+
+		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
+		}
 
 		$contentService = $this->repository->getContentService();
-		$content = $contentService->loadContent( $cm_content_id );
+		$userService = $this->repository->getUserService();
+
+		if (!$request->query->has('cms_content_id')) {
+			return $this->handleResponse(['message' => 'Content wurde nicht angegeben!!', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
+		}
+
+		$contentId = $request->query->get('cms_content_id');
+
+		$contentInfo = $contentService->loadContentInfo( $contentId );
+		$userId = $userService->loadUser($contentInfo->ownerId);
+		$this->repository->setCurrentUser($userId);
+		$content = $contentService->loadContent( $contentId );
 
 		$title = $content->getField('title')->value;
 		$body = $content->getField('text')->value;
 
-		$body = str_replace('<section xmlns="http://docbook.org/ns/docbook" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:ezxhtml="http://ez.no/xmlns/ezpublish/docbook/xhtml" xmlns:ezcustom="http://ez.no/xmlns/ezpublish/docbook/custom" version="5.0-variant ezpublish-1.0">', '', $body);
-
-		$body = str_replace('</section>', '', $body);
-		$body = str_replace('<?xml version="1.0" encoding="UTF-8"?>', '', $body);
-
-		// Parser feht...
+		$parsed = $this->parser->parse($body);
 
 		$res = [
-			'code' => '0',
+			'code' => self::STATUS_OKAY,
 			'message' => '',
 			'content' => [
 				'title' => (string)$title,
-				'content' => $body
+				'content' => $parsed
 			]
 		];
 
-		$response = new JsonResponse();
-		$response->setData($res);
-
-		return $response;
-	}
-
-	private function writeToFile($data) {
-		$myfile = fopen("contentbirdlogger.txt", "w");
-		fwrite($myfile, $data);
-		fclose($myfile);
+		return $this->handleResponse($res, 200);
 	}
 
 	public function contentUpdateAction(Request $request) {
 
-		$requestData = $request->request->get('content_data');
+		$token = $request->query->get('token');
+
+		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
+		}
 
 		$contentId;
 		$postContent;
@@ -261,43 +289,43 @@ class ContentBirdApiController extends Controller {
 
 		if ($request->request->has('post_title')) {
 			$title = $request->request->get('post_title');
-        }
+		}
+
+		if (empty ($contentId) || empty ($title) || empty ($postContent)) {
+			return $this->handleResponse(['message' => 'No Content given', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
+		}
 
 		$html = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent . '</section>';
 
 		$content = $this->updateContent($contentId, $html, $title);
 
 		$res = array(
-			'code' => '0',
-				array('message' => ''),
+			'code' => self::STATUS_OKAY,
+				['message' => ''],
 			'cms_content_id' => $content->id
         );
 
-		$response = new JsonResponse();
-		$response->setData($res);
-
-		return $response;
+		return $this->handleResponse($res, 200);
 	}
 
 
-	private function createContent($contentType, $title, $text, $post_status) {
+	private function createContent($contentType, $title, $text, $post_status, $userId) {
 
 		$contentService = $this->repository->getContentService();
 		$locationService = $this->repository->getLocationService();
 		$contentTypeService = $this->repository->getContentTypeService();
 		$userService = $this->repository->getUserService();
 
-        $this->setCurrentUserAdmin();
+		$user = $userService->loadUser( $userId );
+		$this->repository->setCurrentUser( $user );
 
 		$contentType = $contentTypeService->loadContentTypeByIdentifier( $contentType );
-		$contentCreateStruct = $contentService->newContentCreateStruct( $contentType , 'eng-GB' );
+		$contentCreateStruct = $contentService->newContentCreateStruct( $contentType, 'eng-GB' );
 
 		$contentCreateStruct->setField( 'title', $title );
-
 		$contentCreateStruct->setField( 'text', $text );
 
-
-		$locationCreateStruct = $locationService->newLocationCreateStruct( 2 );
+		$locationCreateStruct = $locationService->newLocationCreateStruct( 2 ); // later dynamic...
 
 		$draft = $contentService->createContent( $contentCreateStruct, array( $locationCreateStruct ) );
 
@@ -323,24 +351,15 @@ class ContentBirdApiController extends Controller {
 		return $types;
 	}
 
-	private function print($data) {
-		echo "<pre>";
-		print_r($data);
-		echo "</pre>";
-	}
-
 	private function updateContent($contentId, $newBody, $newTitle) {
 
 		$repository = $this->container->get( 'ezpublish.api.repository' );
 		$contentService = $this->repository->getContentService();
-		$locationService = $this->repository->getLocationService();
-		$contentTypeService = $this->repository->getContentTypeService();
 		$userService = $this->repository->getUserService();
 
-		$this->setCurrentUserAdmin();
-
 		$contentInfo = $contentService->loadContentInfo( $contentId );
-
+		$userId = $userService->loadUser($contentInfo->ownerId);
+		$this->repository->setCurrentUser($userId);
 
 		if ($contentInfo->isPublished()) {
 			$contentDraft = $contentService->createContentDraft( $contentInfo );
@@ -369,7 +388,11 @@ class ContentBirdApiController extends Controller {
 
 	public function usersAction(Request $request) {
 
-		// to do check if token is correct
+		$token = $request->query->get('token');
+
+		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
+		}
 
 		$this->setCurrentUserAdmin();
 
@@ -393,60 +416,19 @@ class ContentBirdApiController extends Controller {
 		}, $this->repository->getSearchService()->findContent($query)->searchHits);
 
 		$users = [];
-		$counter = 1;
 
 		foreach ($usersContent as $value) {
 
-			array_push($users,
-
-				['display_name' => $value->getFieldValue('first_name')->text,
+			$users[$value->getFieldValue('user_account')->contentId] =
+			[
+				'display_name' => $value->getFieldValue('first_name')->text,
 				'email' => $value->getFieldValue('user_account')->email
-
-			]);
+			];
 		}
 
 		$users = ['users' => $users, 'message' => '', 'code' => '0'];
 
-		$usres = json_encode($users);
-
-		$response = new JsonResponse();
-		$response->setData($users);
-
-		return $response;
-	}
-
-	private function validateContentCreate($data) {
-
-        if ( empty( $data ) ) {
-            return $this->handle_error(
-                self::ERROR_OBJECT_INVALID,
-                'Invalid content data object',
-                422
-            );
-        }
-
-        if ( empty( $data['post_title'] ) ) {
-            return $this->handle_error(
-                self::ERROR_NO_TITLE_GIVEN,
-                'No title given',
-                422
-            );
-        }
-
-        if ( empty( $data['post_content'] ) ) {
-            return $this->handle_error(
-                self::ERROR_NO_TITLE_GIVEN,
-                'No title given',
-                422
-            );
-        }
-
-		return 0;
-
-        $content_data = array(
-            'post_title'   => $data['content_data']['post_title'],
-            'post_content' => $data['content_data']['post_content'],
-        );
+		return $this->handleResponse($users, 200);
 	}
 
 	private function setCurrentUserAdmin() {
@@ -454,13 +436,4 @@ class ContentBirdApiController extends Controller {
 		$administratorUser = $userService->loadUser( 14 );
 		$this->repository->setCurrentUser( $administratorUser );
 	}
-
-	private function handle_error( $error_code, $error_message, $http_status_code = null ) {
-        $payload = array(
-            'code' => $error_code,
-            'message' => $error_message,
-		);
-
-		return $payload;
-    }
 }

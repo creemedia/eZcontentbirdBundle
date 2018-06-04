@@ -6,7 +6,7 @@ namespace creemedia\Bundle\eZcontentBirdBundle\Slot;
  use eZ\Publish\API\Repository\ContentService;
  use Symfony\Component\DependencyInjection\ContainerInterface as Container;
 
- class OnPublishSlot extends BaseSlot
+ class OnDeleteSlot extends BaseSlot
  {
      /**
       * @var \eZ\Publish\API\Repository\ContentService
@@ -21,10 +21,10 @@ namespace creemedia\Bundle\eZcontentBirdBundle\Slot;
 
      public function receive( Signal $signal )
      {
-         if ( $signal instanceof Signal\ContentService\PublishVersionSignal ) {
-
-         	$this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
-         	$this->contentBirdService->contentStatus($signal->contentId, date("Y-m-d") ,'published' );
+		 if ($signal instanceof Signal\ContentService\DeleteContentSignal) {
+			$this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
+			$this->contentBirdService->contentStatus($signal->contentId, date("Y-m-d") ,'deleted' );
 		 }
+
 	 }
  }
