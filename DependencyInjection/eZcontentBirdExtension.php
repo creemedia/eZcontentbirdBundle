@@ -1,5 +1,5 @@
 <?php
-namespace creemedia\Bundle\eZcontentBirdBundle\DependencyInjection;
+namespace creemedia\Bundle\eZcontentbirdBundle\DependencyInjection;
 
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\Config\FileLocator;
@@ -9,7 +9,12 @@ use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Component\Config\Resource\FileResource;
 
-class eZcontentBirdBundleExtension extends Extension
+/**
+ * This is the class that loads and manages your bundle configuration
+ *
+ * To learn more see {@link http://symfony.com/doc/current/cookbook/bundles/extension.html}
+ */
+class eZcontentbirdExtension extends Extension
 {
     /**
      * {@inheritdoc}
@@ -22,18 +27,13 @@ class eZcontentBirdBundleExtension extends Extension
         $loader = new Loader\YamlFileLoader($container, new FileLocator(__DIR__.'/../Resources/config'));
 		$loader->load('services.yml');
 
-		$container->setParameter('cm_content_bird_connector.token', $config['token']);
+		$container->setParameter('e_zcontentbird.token', $config['token']);
 	}
 
 	public function prepend(ContainerBuilder $container) {
-	    $configFile = __DIR__ . '/../Resources/config/contentbirdconnectorbundle.yml';
+	    $configFile = __DIR__ . '/../Resources/config/eZcontentbird.yml';
         $config = Yaml::parse(file_get_contents($configFile));
         $container->prependExtensionConfig('ezpublish', $config);
         $container->addResource(new FileResource($configFile));
 	}
-
-	public function getAlias()
-    {
-        return "contentbird";
-    }
 }

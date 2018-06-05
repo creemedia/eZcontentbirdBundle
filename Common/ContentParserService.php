@@ -1,6 +1,6 @@
 <?php
 
-namespace creemedia\Bundle\eZcontentBirdBundle\Common;
+namespace creemedia\Bundle\eZcontentbirdBundle\Common;
 
 use eZ\Bundle\EzPublishCoreBundle\FieldType\RichText\Converter;
 use eZ\Publish\Core\FieldType\RichText\Converter\Xslt;

@@ -1,5 +1,5 @@
 <?php
-namespace creemedia\Bundle\eZcontentBirdBundle\DependencyInjection;
+namespace creemedia\Bundle\eZcontentbirdBundle\DependencyInjection;
 
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
@@ -12,12 +12,13 @@ class Configuration implements ConfigurationInterface
     public function getConfigTreeBuilder()
     {
         $treeBuilder = new TreeBuilder();
-        $rootNode = $treeBuilder->root('contentbird');
+        $rootNode = $treeBuilder->root('e_zcontentbird');
 
 		$rootNode
-		->children()
-			->scalarNode('token')->defaultValue('')->end()
-		->end();
+			->children()
+				->scalarNode('token')->defaultValue('')->end()
+			->end()
+			;
 
         return $treeBuilder;
     }

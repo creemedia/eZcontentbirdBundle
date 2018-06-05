@@ -1,7 +1,5 @@
 <?php
-
-namespace creemedia\Bundle\eZcontentBirdBundle\Common;
-
+namespace creemedia\Bundle\eZcontentbirdBundle\Common;
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
 use eZ\Publish\API\Repository\Repository;
 use eZ\Publish\API\Repository\Values\Content\LocationQuery;
@@ -15,6 +13,8 @@ class ContentBirdApiService {
 	private $container;
 	private $repository;
 	private $url;
+
+	const token = 'e_zcontentbird.token';
 
 	public function __construct( Container $container, Repository $repository ) {
 		$this->container = $container;
@@ -57,7 +57,7 @@ class ContentBirdApiService {
 
 	public function createRequest($method, $endpoint, $body) {
 
-		$token = $this->container->getParameter('cm_content_bird_connector.token');
+		$token = $this->container->getParameter(self::token);
 		$token = $this->getTokenPlugin();
 
 		$headers = [
@@ -65,7 +65,7 @@ class ContentBirdApiService {
 			'Accept' => 'application/json'
 		];
 
-		$instance = $this->getInstanceFromToken($this->container->getParameter('cm_content_bird_connector.token'));
+		$instance = $this->getInstanceFromToken($this->container->getParameter(self::token));
 		$client = new \GuzzleHttp\Client(['base_uri' => $instance['iss']]);
 
 		$response = $client->request($method, $endpoint, ['headers' => $headers, 'body' => $body]);
@@ -77,7 +77,7 @@ class ContentBirdApiService {
 	}
 
 	public function getTokenPlugin() {
-		$instance = $this->getInstanceFromToken($this->container->getParameter('cm_content_bird_connector.token'));
+		$instance = $this->getInstanceFromToken($this->container->getParameter(self::token));
 		$client = new \GuzzleHttp\Client(['base_uri' => $instance['iss']]);
 
 		$response = $client->request('GET');

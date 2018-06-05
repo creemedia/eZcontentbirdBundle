@@ -1,9 +1,17 @@
 <?php
-namespace creemedia\Bundle\eZcontentBirdBundle;
+namespace creemedia\Bundle\eZcontentbirdBundle;
 
 use Symfony\Component\HttpKernel\Bundle\Bundle;
-use creemedia\Bundle\eZcontentBirdBundle\eZcontentBirdExtension;
+use creemedia\Bundle\eZcontentBirdBundle\DependencyInjection\eZcontentbirdExtension;
 
-class CMContentBirdConnectorBundle extends Bundle {
-	protected $name = 'eZcontentBirdBundle';
+class eZcontentbirdBundle extends Bundle {
+	protected $name = 'eZcontentbirdBundle';
+
+	/**
+	 * {@inheritdoc}
+	 */
+	public function getAlias()
+	{
+		return 'e_zcontentbird';
+	}
 }

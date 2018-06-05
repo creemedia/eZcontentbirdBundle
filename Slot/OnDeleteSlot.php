@@ -1,5 +1,5 @@
 <?php
-namespace creemedia\Bundle\eZcontentBirdBundle\Slot;
+namespace creemedia\Bundle\eZcontentbirdBundle\Slot;
 
  use eZ\Publish\Core\SignalSlot\Slot as BaseSlot;
  use eZ\Publish\Core\SignalSlot\Signal;

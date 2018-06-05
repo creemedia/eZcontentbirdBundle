@@ -4,7 +4,7 @@ creemedia eZ contentbird Bundle is an eZPlatform bundle to connect contentbird w
 
 This bundle allows you to synchronize you Text written on [contentbird](http://contentbird.io/) with your eZ Platform project.
 
-In this first version it is possible to push text to eZ platform and to pull changed contnet into contentbird.
+In this first version it is possible to push text to eZ platform and to pull changed content into contentbird.
 
 ### Register the bundle
 

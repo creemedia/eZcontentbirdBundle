@@ -1,24 +1,23 @@
-services:   
+services:
     cmcontentbirdconnector.controller_api:
-        class: creemedia\Bundle\eZcontentBirdBundle\Controller\ContentBirdApiController
+        class: creemedia\Bundle\eZcontentbirdBundle\Controller\ContentBirdApiController
         arguments: ['@service_container', '@ezpublish.api.repository']
     cmcontentbirdconnector.service.api:
-        class: creemedia\Bundle\eZcontentBirdBundle\Common\ContentBirdApiService
+        class: creemedia\Bundle\eZcontentbirdBundle\Common\ContentBirdApiService
         arguments: ['@service_container', '@ezpublish.api.repository']
 
     cmcontentbirdconnector.service.parser:
-        class: creemedia\Bundle\eZcontentBirdBundle\Common\ContentParserService
+        class: creemedia\Bundle\eZcontentbirdBundle\Common\ContentParserService
         arguments: ['@service_container']
 
     cmcontentbirdconnector.onpublish_slot:
-        class: creemedia\Bundle\eZcontentBirdBundle\Slot\OnPublishSlot
+        class: creemedia\Bundle\eZcontentbirdBundle\Slot\OnPublishSlot
         arguments: ['@ezpublish.api.service.content', '@service_container']
         tags:
             - { name: ezpublish.api.slot, signal: ContentService\PublishVersionSignal }
 
     cmcontentbirdconnector.ondelete_slot:
-        class: creemedia\Bundle\eZcontentBirdBundle\Slot\OnDeleteSlot
+        class: creemedia\Bundle\eZcontentbirdBundle\Slot\OnDeleteSlot
         arguments: ['@ezpublish.api.service.content', '@service_container']
         tags:
             - { name: ezpublish.api.slot, signal: ContentService\DeleteVersionSignal }
-

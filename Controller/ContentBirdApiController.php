@@ -1,6 +1,7 @@
 <?php
 
-namespace creemedia\Bundle\eZcontentBirdBundle\Controller;
+// namespace CM\eZcontentbirdBundle\Controller;
+namespace creemedia\Bundle\eZcontentbirdBundle\Controller;
 
 use eZ\Publish\API\Repository\Values\Content\LocationQuery;
 use eZ\Publish\API\Repository\Values\Content\Query;
@@ -25,6 +26,7 @@ class ContentBirdApiController extends Controller {
 	private $parser;
 	private $url;
 
+	const token = 'e_zcontentbird.token';
 	const PLUGIN_VERSION = '0.2';
 
 	/** Status and error codes */
@@ -105,7 +107,7 @@ class ContentBirdApiController extends Controller {
 		$token = $request->query->get('token');
 		$action = $request->query->get('lbcm');
 
-		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+		if ($token !== $this->container->getParameter(self::token)) {
 			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 403);
 		}
 
@@ -133,7 +135,7 @@ class ContentBirdApiController extends Controller {
 
 	public function statusAction(Request $request) {
 
-		$token = $this->container->getParameter('cm_content_bird_connector.token');
+		$token = $this->container->getParameter(self::token);
 
 		$inserted = false;
 		if (strlen($token) > 0) {
@@ -168,13 +170,14 @@ class ContentBirdApiController extends Controller {
 
 	public function createAction(Request $request) {
 
-		$requestData = $request->request->get('content_data');
 
-		$token = $request->query->get('token');
-		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+
+/*		$token = $request->query->get('token');
+		if ($token !== $this->container->getParameter(self::token)) {
 			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
 		}
-
+*/
+		$requestData = $request->request->get('content_data');
 		$check = $this->validateContentCreate($requestData);
 
 		if (!is_int($check)) {
@@ -232,7 +235,7 @@ class ContentBirdApiController extends Controller {
 
 		$token = $request->query->get('token');
 
-		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+		if ($token !== $this->container->getParameter(self::token)) {
 			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
 		}
 
@@ -271,7 +274,7 @@ class ContentBirdApiController extends Controller {
 
 		$token = $request->query->get('token');
 
-		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+		if ($token !== $this->container->getParameter(self::token)) {
 			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
 		}
 
@@ -390,7 +393,7 @@ class ContentBirdApiController extends Controller {
 
 		$token = $request->query->get('token');
 
-		if ($token !== $this->container->getParameter('cm_content_bird_connector.token')) {
+		if ($token !== $this->container->getParameter(self::token)) {
 			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
 		}
 
