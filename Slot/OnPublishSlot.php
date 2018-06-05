@@ -21,7 +21,7 @@ namespace creemedia\Bundle\eZcontentbirdBundle\Slot;
 
      public function receive( Signal $signal )
      {
-         if ( $signal instanceof Signal\ContentService\PublishVersionSignal ) {
+         if ($signal instanceof Signal\ContentService\PublishVersionSignal) {
 
          	$this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
          	$this->contentBirdService->contentStatus($signal->contentId, date("Y-m-d") ,'published' );

@@ -1,6 +1,5 @@
 <?php
 
-// namespace CM\eZcontentbirdBundle\Controller;
 namespace creemedia\Bundle\eZcontentbirdBundle\Controller;
 
 use eZ\Publish\API\Repository\Values\Content\LocationQuery;
@@ -170,13 +169,11 @@ class ContentBirdApiController extends Controller {
 
 	public function createAction(Request $request) {
 
-
-
-/*		$token = $request->query->get('token');
+		$token = $request->query->get('token');
 		if ($token !== $this->container->getParameter(self::token)) {
 			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
 		}
-*/
+
 		$requestData = $request->request->get('content_data');
 		$check = $this->validateContentCreate($requestData);
 
