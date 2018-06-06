@@ -14,7 +14,7 @@ class ContentBirdApiService {
 	private $repository;
 	private $url;
 
-	const token = 'e_zcontentbird.token';
+	const token = 'contentbird.token';
 
 	public function __construct( Container $container, Repository $repository ) {
 		$this->container = $container;

@@ -14,7 +14,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use eZ\Publish\API\Repository\Repository;
 use Symfony\Component\DependencyInjection\Definition;
 use eZ\Bundle\EzPublishCoreBundle\Controller;
-use eZ\Publish\Core\FieldType\Image\Value;
+use CM\ExtendedImageBundle\eZ\Publish\FieldType\ExtendedImage\Value;
+use DOMDocument;
+use eZ\Publish\API\Repository\Values\Content;
 
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
 
@@ -25,8 +27,8 @@ class ContentBirdApiController extends Controller {
 	private $parser;
 	private $url;
 
-	const token = 'e_zcontentbird.token';
-	const PLUGIN_VERSION = '0.2';
+	const token = 'contentbird.token';
+	const PLUGIN_VERSION = '0.3';
 
 	/** Status and error codes */
 	const STATUS_OKAY                  = 0;
@@ -142,6 +144,7 @@ class ContentBirdApiController extends Controller {
 		}
 
 		$res = [
+
 			'message' => $inserted ? 'Plugin richtig installiert' : 'Plugin wurde nicht korrekt installiert',
 			'code' => $inserted ? self::STATUS_OKAY : self::ERROR_GENERAL,
 			'version' => self::PLUGIN_VERSION,
@@ -175,13 +178,14 @@ class ContentBirdApiController extends Controller {
 		}
 
 		$requestData = $request->request->get('content_data');
+
 		$check = $this->validateContentCreate($requestData);
 
 		if (!is_int($check)) {
 			return $check;
 		}
 
-		$html;
+		$postContent;
 		$title;
 		$postStatus;
 		$meta;
@@ -194,7 +198,7 @@ class ContentBirdApiController extends Controller {
 		}
 
 		if ( !empty($requestData['post_content'])) {
-			$html = $requestData['post_content'];
+			$postContent = $requestData['post_content'];
 		}
 
 		if ( !empty($requestData['post_status'])) {
@@ -211,19 +215,21 @@ class ContentBirdApiController extends Controller {
 			}
 		}
 
-		if (empty($title) || empty($html) || empty($cmsUserId) || empty($postType)) {
+		if (empty($title) || empty($postContent) || empty($cmsUserId) || empty($postType)) {
 			return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
 		}
 
-		$html = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $html .  '</section>';
+		$postContent = $this->handleImages($postContent);
 
-        $content = $this->createContent($postType, $title, $html, 'draft', $cmsUserId);
+		$postContent = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent .  '</section>';
 
-		$res = array(
+        $content = $this->createContent($postType, $title, $postContent, 'draft', $cmsUserId);
+
+		$res = [
 			'code' => self::STATUS_OKAY,
 				array('message' => ''),
 			'cms_content_id' => $content->id
-			);
+		];
 
 		return $this->handleResponse($res, 200);
 	}
@@ -294,6 +300,8 @@ class ContentBirdApiController extends Controller {
 		if (empty ($contentId) || empty ($title) || empty ($postContent)) {
 			return $this->handleResponse(['message' => 'No Content given', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
 		}
+
+		$this->handleImages($postContent);
 
 		$html = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent . '</section>';
 
@@ -432,8 +440,94 @@ class ContentBirdApiController extends Controller {
 	}
 
 	private function setCurrentUserAdmin() {
+
 		$userService = $this->repository->getUserService();
 		$administratorUser = $userService->loadUser( 14 );
 		$this->repository->setCurrentUser( $administratorUser );
+	}
+
+	private function uploadImage($image, $imageName) {
+
+		$repository = $this->container->get( 'ezpublish.api.repository' );
+        $contentService = $repository->getContentService();
+        $locationService = $repository->getLocationService();
+        $contentTypeService = $repository->getContentTypeService();
+        $repository->setCurrentUser( $repository->getUserService()->loadUser( 14 ) );
+		$contentType = $contentTypeService->loadContentTypeByIdentifier( "image" );
+		$contentCreateStruct = $contentService->newContentCreateStruct( $contentType, 'eng-GB' );
+
+		$contentCreateStruct->setField( 'name', $imageName );
+
+		$value = new Value(
+			[
+				'path' => $imageName,
+				'fileSize' => filesize( $imageName ),
+				'fileName' => basename( $imageName ),
+				'alternativeText' => $imageName
+			]
+		);
+		$contentCreateStruct->setField( 'image', $value );
+		$draft = $contentService->createContent(
+			$contentCreateStruct,
+			[$locationService->newLocationCreateStruct( '43' )]
+
+		);
+		$content = $contentService->publishVersion( $draft->versionInfo );
+
+		$urlToImage = $content->getField('image')->value->uri;
+		$id = $content->id;
+
+		return $id;
+	}
+
+
+	private function handleImages($html) {
+
+		$dom = new DOMDocument;
+		$dom->loadHTML($html);
+		$images = $dom->getElementsByTagName('img');
+		foreach ($images as $image) {
+
+			$imageName = substr($image->getAttribute('src'), strrpos($image->getAttribute('src'), '/') + 1);
+
+			$imageId;
+			$id = $this->findImageInCMS($imageName);
+
+			if ( $id !== -1) {
+				$imageId = $id;
+			}
+			else {
+				$img = file_get_contents($image->getAttribute('src'));
+
+				file_put_contents($imageName, $img);
+				$imageId = $this->uploadImage($img, $imageName);
+				unlink($imageName);
+			}
+			$url = '<div data-ezelement="ezembed" data-href="ezcontent://' . $imageId .'" data-ezview="embed"></div>';
+		}
+	}
+
+	private function findImageInCMS($imageName) {
+
+		$contentService = $this->repository->getContentService();
+		$locationService = $this->repository->getLocationService();
+		$contentTypeService = $this->repository->getContentTypeService();
+		$searchService = $this->repository->getSearchService();
+		$userService = $this->repository->getUserService();
+
+		$query = new Query();
+		$query->filter = new Criterion\LogicalAnd(
+			[
+				new Criterion\ParentLocationId('43'),
+				new Criterion\ContentTypeIdentifier(['image']),
+				new Criterion\Field('name', Criterion\Operator::EQ, $imageName)
+			]
+		);
+
+		$result = $searchService->findContent($query)->searchHits;
+		if(!empty($result[0])) {
+			return $result->valueObject->versionInfo->contentInfo->id;
+		}
+		return -1;
 	}
 }

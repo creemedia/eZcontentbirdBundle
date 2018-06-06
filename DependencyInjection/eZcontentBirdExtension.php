@@ -27,7 +27,7 @@ class eZcontentbirdExtension extends Extension
         $loader = new Loader\YamlFileLoader($container, new FileLocator(__DIR__.'/../Resources/config'));
 		$loader->load('services.yml');
 
-		$container->setParameter('e_zcontentbird.token', $config['token']);
+		$container->setParameter('contentbird.token', $config['token']);
 	}
 
 	public function prepend(ContainerBuilder $container) {
@@ -35,5 +35,9 @@ class eZcontentbirdExtension extends Extension
         $config = Yaml::parse(file_get_contents($configFile));
         $container->prependExtensionConfig('ezpublish', $config);
         $container->addResource(new FileResource($configFile));
+	}
+
+	public function getAlias() {
+		return 'contentbird';
 	}
 }

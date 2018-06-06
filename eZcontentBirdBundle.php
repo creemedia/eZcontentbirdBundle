@@ -7,11 +7,11 @@ use creemedia\Bundle\eZcontentBirdBundle\DependencyInjection\eZcontentbirdExtens
 class eZcontentbirdBundle extends Bundle {
 	protected $name = 'eZcontentbirdBundle';
 
-	/**
+		/**
 	 * {@inheritdoc}
 	 */
-	public function getAlias()
+	public function getContainerExtension()
 	{
-		return 'e_zcontentbird';
+		return new DependencyInjection\eZcontentbirdExtension();
 	}
 }
