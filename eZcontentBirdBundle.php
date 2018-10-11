@@ -2,7 +2,7 @@
 namespace creemedia\Bundle\eZcontentbirdBundle;
 
 use Symfony\Component\HttpKernel\Bundle\Bundle;
-use creemedia\Bundle\eZcontentBirdBundle\DependencyInjection\eZcontentbirdExtension;
+use creemedia\Bundle\eZcontentbirdBundle\DependencyInjection\eZcontentbirdExtension;
 
 class eZcontentbirdBundle extends Bundle {
 	protected $name = 'eZcontentbirdBundle';
