@@ -25,6 +25,16 @@ public function registerBundles()
 }
 ```
 
+### Register routes
+
+```yml
+
+# app/config/routing.yml
+
+creemedia.contentbird:
+    resource: "@eZcontentbirdBundle/Resources/config/routing.yml"
+
+```
 ### Setup your credentials
 
 ```yaml

@@ -28,7 +28,7 @@ class ContentBirdApiController extends Controller {
 	private $url;
 
 	const token = 'contentbird.token';
-	const PLUGIN_VERSION = '0.3';
+	const PLUGIN_VERSION = '0.4';
 
 	/** Status and error codes */
 	const STATUS_OKAY                  = 0;
@@ -219,7 +219,7 @@ class ContentBirdApiController extends Controller {
 			return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
 		}
 
-		$postContent = $this->handleImages($postContent);
+		$this->handleImages($postContent);
 
 		$postContent = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent .  '</section>';
 
@@ -480,30 +480,10 @@ class ContentBirdApiController extends Controller {
 		return $id;
 	}
 
-
-	private function handleImages($html) {
-
-		$dom = new DOMDocument;
-		$dom->loadHTML($html);
-		$images = $dom->getElementsByTagName('img');
-		foreach ($images as $image) {
-
-			$imageName = substr($image->getAttribute('src'), strrpos($image->getAttribute('src'), '/') + 1);
-
-			$imageId;
-			$id = $this->findImageInCMS($imageName);
-
-			if ( $id !== -1) {
-				$imageId = $id;
-			}
-			else {
-				$img = file_get_contents($image->getAttribute('src'));
-
-				file_put_contents($imageName, $img);
-				$imageId = $this->uploadImage($img, $imageName);
-				unlink($imageName);
-			}
-			$url = '<div data-ezelement="ezembed" data-href="ezcontent://' . $imageId .'" data-ezview="embed"></div>';
+	private function handleImages(&$html) {
+		preg_match_all('/<img[^>]+>/i', $html, $result);
+		if (count($result[0]) > 0) {
+            $html = preg_replace('/<img[^>]+>/i','', $html);
 		}
 	}
 
