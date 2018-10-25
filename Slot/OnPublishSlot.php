@@ -1,7 +1,7 @@
 <?php
 namespace creemedia\Bundle\eZcontentbirdBundle\Slot;
 
- use eZ\Publish\Core\SignalSlot\Slot as BaseSlot;
+use eZ\Publish\Core\SignalSlot\Slot as BaseSlot;
  use eZ\Publish\Core\SignalSlot\Signal;
  use eZ\Publish\API\Repository\ContentService;
  use Symfony\Component\DependencyInjection\ContainerInterface as Container;
@@ -13,18 +13,24 @@ namespace creemedia\Bundle\eZcontentbirdBundle\Slot;
       */
      private $contentService;
 
-     public function __construct( ContentService $contentService, Container $container )
+     public function __construct(ContentService $contentService, Container $container)
      {
          $this->container = $container;
          $this->contentService = $contentService;
      }
 
-     public function receive( Signal $signal )
+     public function receive(Signal $signal)
      {
-         if ( $signal instanceof Signal\ContentService\PublishVersionSignal ) {
+         if ($signal instanceof Signal\ContentService\PublishVersionSignal) {
+             $content = $this->contentService->loadContent($signal->contentId);
+             $contentId = $content->versionInfo->contentInfo->contentTypeId;
+            
+             if ($contentId !== 2) {
+                 return;
+             }
 
-         	$this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
-         	$this->contentBirdService->contentStatus($signal->contentId, date("Y-m-d") ,'published' );
-		 }
-	 }
+             $this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
+             $this->contentBirdService->contentStatus($signal->contentId, date("Y-m-d"), 'published');
+         }
+     }
  }
