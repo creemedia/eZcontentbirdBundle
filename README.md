@@ -42,6 +42,10 @@ contentbird:
     token: "your-token"
 ```
 
+### Fix autoload Problem
+
+run ```composer dumpautoload -a```
+
 License
 -------
 
