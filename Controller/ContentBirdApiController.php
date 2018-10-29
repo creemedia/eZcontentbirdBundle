@@ -404,19 +404,9 @@ class ContentBirdApiController extends Controller {
 
 		$this->setCurrentUserAdmin();
 
-		$query = new LocationQuery();
-		$query->filter = new Criterion\LogicalAnd([
-			new Criterion\LocationId(5)
-		]);
-
-		$parentUserLocation = array_map(function ($hit) {
-			return $hit->valueObject;
-		}, $this->repository->getSearchService()->findLocations($query)->searchHits);
-
 		$query = new Query();
 		$query->filter = new Criterion\LogicalAnd([
-			new Criterion\Subtree([$parentUserLocation[0]->pathString]),
-			new Criterion\ContentTypeIdentifier(['user'])
+			new Criterion\ContentId([172776, 172749])
 		]);
 
 		$usersContent = array_map(function ($hit) {
