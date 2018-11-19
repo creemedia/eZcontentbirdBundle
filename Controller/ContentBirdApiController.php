@@ -192,6 +192,7 @@ class ContentBirdApiController extends Controller {
 		$cmsUserId;
 		$postType;
 		$publishDate;
+        $keywords = [];
 
 		if ( !empty($requestData['post_title'])) {
 			$title = $requestData['post_title'];
@@ -215,7 +216,12 @@ class ContentBirdApiController extends Controller {
 			}
 		}
 
-		if (empty($title) || empty($postContent) || empty($cmsUserId) || empty($postType)) {
+        if ( !empty($requestData['keywords'])) {
+            $keywords = array_values($requestData['keywords']);
+        }
+
+
+        if (empty($title) || empty($postContent) || empty($cmsUserId) || empty($postType)) {
 			return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
 		}
 
@@ -223,7 +229,7 @@ class ContentBirdApiController extends Controller {
 
 		$postContent = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent .  '</section>';
 
-        $content = $this->createContent($postType, $title, $postContent, 'draft', $cmsUserId);
+        $content = $this->createContent($postType, $title, $postContent, 'draft', $cmsUserId, $keywords);
 
 		$res = [
 			'code' => self::STATUS_OKAY,
@@ -284,6 +290,7 @@ class ContentBirdApiController extends Controller {
 		$contentId;
 		$postContent;
 		$title;
+		$keywords = [];
 
 		if ($request->request->has('cms_content_id')) {
 			$contentId = $request->request->get('cms_content_id');
@@ -297,6 +304,10 @@ class ContentBirdApiController extends Controller {
 			$title = $request->request->get('post_title');
 		}
 
+        if ($request->request->has('keywords')) {
+            $keywords = $request->request->get('keywords');
+        }
+
 		if (empty ($contentId) || empty ($title) || empty ($postContent)) {
 			return $this->handleResponse(['message' => 'No Content given', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
 		}
@@ -305,7 +316,7 @@ class ContentBirdApiController extends Controller {
 
 		$html = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent . '</section>';
 
-		$content = $this->updateContent($contentId, $html, $title);
+		$content = $this->updateContent($contentId, $html, $title, $keywords);
 
 		$res = array(
 			'code' => self::STATUS_OKAY,
@@ -317,7 +328,7 @@ class ContentBirdApiController extends Controller {
 	}
 
 
-	private function createContent($contentType, $title, $text, $post_status, $userId) {
+	private function createContent($contentType, $title, $text, $post_status, $userId, $keywords) {
 
 		$contentService = $this->repository->getContentService();
 		$locationService = $this->repository->getLocationService();
@@ -329,6 +340,10 @@ class ContentBirdApiController extends Controller {
 
 		$contentType = $contentTypeService->loadContentTypeByIdentifier( $contentType );
 		$contentCreateStruct = $contentService->newContentCreateStruct( $contentType, 'eng-GB' );
+
+        if (!empty($keywords)) {
+            $contentCreateStruct->setField('cb_keywords', implode(';', $keywords));
+        }
 
 		$contentCreateStruct->setField( 'title', $title );
 		$contentCreateStruct->setField( 'text', $text );
@@ -382,6 +397,13 @@ class ContentBirdApiController extends Controller {
 		if ($newTitle) {
 			$contentUpdateStruct->setField( 'title', $newTitle );
 		}
+
+        if (!empty($keywords)) {
+            $contentUpdateStruct->setField('cb_keywords', implode(';', $keywords));
+        }
+        else {
+            $contentUpdateStruct->setField('cb_keywords', '');
+        }
 
 		$contentUpdateStruct->setField( 'text', $newBody );
 
