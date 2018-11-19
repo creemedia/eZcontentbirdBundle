@@ -374,7 +374,7 @@ class ContentBirdApiController extends Controller {
 		return $types;
 	}
 
-	private function updateContent($contentId, $newBody, $newTitle) {
+	private function updateContent($contentId, $newBody, $newTitle, $keywords) {
 
 		$repository = $this->container->get( 'ezpublish.api.repository' );
 		$contentService = $this->repository->getContentService();
