@@ -66,14 +66,16 @@ class ContentBirdApiService {
 		];
 
 		$instance = $this->getInstanceFromToken($this->container->getParameter(self::token));
-		$client = new \GuzzleHttp\Client(['base_uri' => $instance['iss']]);
 
-		$response = $client->request($method, $endpoint, ['headers' => $headers, 'body' => $body]);
-
-		$responseBody = json_decode($response->getBody(), true);
-
-		return $responseBody;
-
+		try {
+            $client = new \GuzzleHttp\Client(['base_uri' => $instance['iss']]);
+            $response = $client->request($method, $endpoint, ['headers' => $headers, 'body' => $body]);
+            $responseBody = json_decode($response->getBody(), true);
+            return $responseBody;
+        } catch (\Exception $e) {
+		    echo "error";
+		    return false;
+        }
 	}
 
 	public function getTokenPlugin() {
