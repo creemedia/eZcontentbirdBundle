@@ -428,7 +428,7 @@ class ContentBirdApiController extends Controller {
 
 		$query = new Query();
 		$query->filter = new Criterion\LogicalAnd([
-			new Criterion\ContentId([172776, 172749])
+			new Criterion\ContentId([172776, 172749, 202610])
 		]);
 
 		$usersContent = array_map(function ($hit) {
