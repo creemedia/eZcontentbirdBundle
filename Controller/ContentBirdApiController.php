@@ -28,7 +28,7 @@ class ContentBirdApiController extends Controller {
 	private $url;
 
 	const token = 'contentbird.token';
-	const PLUGIN_VERSION = '0.4';
+	const PLUGIN_VERSION = '0.5';
 
 	/** Status and error codes */
 	const STATUS_OKAY                  = 0;
@@ -225,7 +225,7 @@ class ContentBirdApiController extends Controller {
 			return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
 		}
 
-		$this->handleImages($postContent);
+		$postContent = $this->handleImages($postContent);
 
 		$postContent = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent .  '</section>';
 
@@ -345,6 +345,10 @@ class ContentBirdApiController extends Controller {
             $contentCreateStruct->setField('cb_keywords', implode(';', $keywords));
         }
 
+        // convert div to p :P
+        $text = str_replace('<div>', '<p>', $text);
+        $text = str_replace('</div>', '</p>', $text);
+
 		$contentCreateStruct->setField( 'title', $title );
 		$contentCreateStruct->setField( 'text', $text );
 
@@ -458,68 +462,74 @@ class ContentBirdApiController extends Controller {
 		$this->repository->setCurrentUser( $administratorUser );
 	}
 
-	private function uploadImage($image, $imageName) {
-
-		$repository = $this->container->get( 'ezpublish.api.repository' );
+    private function uploadImage($image, $imageName, $fileName, $alternativeText)
+    {
+        $repository = $this->container->get('ezpublish.api.repository');
         $contentService = $repository->getContentService();
         $locationService = $repository->getLocationService();
         $contentTypeService = $repository->getContentTypeService();
-        $repository->setCurrentUser( $repository->getUserService()->loadUser( 14 ) );
-		$contentType = $contentTypeService->loadContentTypeByIdentifier( "image" );
-		$contentCreateStruct = $contentService->newContentCreateStruct( $contentType, 'eng-GB' );
+        $repository->setCurrentUser($repository->getUserService()->loadUser(14));
+        $contentType = $contentTypeService->loadContentTypeByIdentifier("image");
+        $contentCreateStruct = $contentService->newContentCreateStruct($contentType, 'eng-GB');
 
-		$contentCreateStruct->setField( 'name', $imageName );
+        $contentCreateStruct->setField('name', $imageName);
 
-		$value = new Value(
-			[
-				'path' => $imageName,
-				'fileSize' => filesize( $imageName ),
-				'fileName' => basename( $imageName ),
-				'alternativeText' => $imageName
-			]
-		);
-		$contentCreateStruct->setField( 'image', $value );
-		$draft = $contentService->createContent(
-			$contentCreateStruct,
-			[$locationService->newLocationCreateStruct( '43' )]
+        $value = new Value(
+            [
+                'path' => $imageName,
+                'fileSize' => filesize($imageName),
+                'fileName' => basename($imageName),
+                'alternativeText' => $imageName
+            ]
+        );
+        $contentCreateStruct->setField('image', $value);
+        $draft = $contentService->createContent(
+            $contentCreateStruct,
+            [$locationService->newLocationCreateStruct('43')]
 
-		);
-		$content = $contentService->publishVersion( $draft->versionInfo );
+        );
+        $content = $contentService->publishVersion($draft->versionInfo);
 
-		$urlToImage = $content->getField('image')->value->uri;
-		$id = $content->id;
+        $id = $content->id;
 
-		return $id;
-	}
+        return $id;
+    }
 
-	private function handleImages(&$html) {
-		preg_match_all('/<img[^>]+>/i', $html, $result);
-		if (count($result[0]) > 0) {
-            $html = preg_replace('/<img[^>]+>/i','', $html);
-		}
-	}
+    private function handleImages($html)
+    {
+        $doc = new DOMDocument('1.0', 'utf-8');
+        $doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+        $path = $this->container->get('kernel')->getRootDir() . '/../web/var/storage/image.jpg';
+        $elements = $doc->getElementsByTagName('img');
 
-	private function findImageInCMS($imageName) {
+        for ($i = $elements->length - 1; $i >= 0; $i --) {
+            $tag = $elements->item($i);
+            $src =  $tag->getAttribute('src');
+            $image = file_get_contents($src);
+            $fp = fopen($path, "w");
+            fwrite($fp, $image);
+            fclose($fp);
+            $contentId = $this->uploadImage('', $path, $tag->getAttribute('title'), $tag->getAttribute('alt'));
+            $ezEmbed = '<div data-ezelement="ezembed" data-href="ezcontent://'.$contentId.'" data-ezview="embed"/>';
+            $nodeDiv = $doc->createTextNode($ezEmbed);
+            $tag->parentNode->replaceChild($nodeDiv, $tag);
 
-		$contentService = $this->repository->getContentService();
-		$locationService = $this->repository->getLocationService();
-		$contentTypeService = $this->repository->getContentTypeService();
-		$searchService = $this->repository->getSearchService();
-		$userService = $this->repository->getUserService();
+            if ($nodeDiv->parentNode->tagName === 'p') {
+                $nodeDiv->parentNode->parentNode->replaceChild($nodeDiv, $nodeDiv->parentNode);
+            }
 
-		$query = new Query();
-		$query->filter = new Criterion\LogicalAnd(
-			[
-				new Criterion\ParentLocationId('43'),
-				new Criterion\ContentTypeIdentifier(['image']),
-				new Criterion\Field('name', Criterion\Operator::EQ, $imageName)
-			]
-		);
+            unlink($path);
+        }
 
-		$result = $searchService->findContent($query)->searchHits;
-		if(!empty($result[0])) {
-			return $result->valueObject->versionInfo->contentInfo->id;
-		}
-		return -1;
-	}
+        $doc->removeChild($doc->doctype);
+        $html = $doc->saveHTML();
+
+        // TODO: clear correctly
+        $html = str_replace('<body>', '', $html);
+        $html = str_replace('</body>', '', $html);
+        $html = str_replace('<html>', '', $html);
+        $html = str_replace('</html>', '', $html);
+        $html = html_entity_decode($html);
+        return $html;
+    }
 }
