@@ -234,11 +234,6 @@ class ContentBirdApiController extends Controller
 
         $content = $this->createContent($postType, $title, $postContent, 'draft', $cmsUserId, $keywords);
 
-
-        $file = fopen('contentbirdd.txt', 'w');
-        fwrite($file, 'fine');
-        fclose($file);
-
         $res = [
             'code' => self::STATUS_OKAY,
             array('message' => ''),
@@ -523,6 +518,10 @@ class ContentBirdApiController extends Controller
             $ezEmbed = '<div data-ezelement="ezembed" data-href="ezcontent://' . $contentId . '" data-ezview="embed"/>';
             $nodeDiv = $doc->createTextNode($ezEmbed);
             $tag->parentNode->replaceChild($nodeDiv, $tag);
+
+            if ($nodeDiv->parentNode->tagName === 'strong' && !empty($nodeDiv->parentNode->parentNode->tagName)) {
+                $nodeDiv->parentNode->parentNode->replaceChild($nodeDiv, $nodeDiv->parentNode);
+            }
 
             if ($nodeDiv->parentNode->tagName === 'p' && !empty($nodeDiv->parentNode->parentNode->tagName)) {
                 $nodeDiv->parentNode->parentNode->replaceChild($nodeDiv, $nodeDiv->parentNode);
