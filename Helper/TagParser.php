@@ -1,6 +1,6 @@
 <?php
 
-namespace CM\eZcontentbirdBundle\Helper;
+namespace creemedia\Bundle\eZcontentbirdBundle\Helper;
 
 class TagParser
 {
