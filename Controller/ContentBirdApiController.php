@@ -9,10 +9,11 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use eZ\Publish\API\Repository\Repository;
 use eZ\Bundle\EzPublishCoreBundle\Controller;
-use CM\eZcontentbirdBundle\Helper\TagParser;
+use creemedia\Bundle\eZcontentbirdBundle\Helper\TagParser;
+use creemedia\Bundle\eZcontentbirdBundle\Helper\ImageHelper as ImageHelper;
 
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
-use CM\eZcontentbirdBundle\Helper\ImageHelper as ImageHelper;
+
 
 class ContentBirdApiController extends Controller
 {
