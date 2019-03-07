@@ -6,6 +6,10 @@ services:
         class: creemedia\Bundle\eZcontentbirdBundle\Common\ContentBirdApiService
         arguments: ['@service_container', '@ezpublish.api.repository']
 
+    cmcontentbirdconnector.service.cms:
+        class: creemedia\Bundle\eZcontentbirdBundle\Common\CmsService
+        arguments: ['@service_container', '@ezpublish.api.repository']
+
     cmcontentbirdconnector.service.parser:
         class: creemedia\Bundle\eZcontentbirdBundle\Common\ContentParserService
         arguments: ['@service_container']
