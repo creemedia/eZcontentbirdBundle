@@ -1,5 +1,7 @@
 <?php
+
 namespace creemedia\Bundle\eZcontentbirdBundle\Common;
+
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
 use eZ\Publish\API\Repository\Repository;
 use eZ\Publish\API\Repository\Values\Content\LocationQuery;
@@ -8,21 +10,21 @@ use eZ\Publish\API\Repository\Values\Content\Query\Criterion;
 use eZ\Publish\API\Repository\Values\Content\Query\SortClause;
 use GuzzleHttp\Client;
 
-class ContentBirdApiService {
-
+class ContentBirdApiService
+{
 	private $container;
 	private $repository;
-	private $url;
 
-	const token = 'contentbird.token';
+	const TOKEN = 'contentbird.token';
 
-	public function __construct( Container $container, Repository $repository ) {
+	public function __construct(Container $container, Repository $repository)
+	{
 		$this->container = $container;
 		$this->repository = $repository;
 	}
 
-	public function pluginStatus($url) {
-
+	public function pluginStatus($url)
+	{
 		$status = 'activated';
 
 		$body = [
@@ -39,7 +41,8 @@ class ContentBirdApiService {
 		return $response;
 	}
 
-	public function contentStatus($contentId, $date, $status) {
+	public function contentStatus($contentId, $date, $status)
+	{
 
 		$body = [
 			'cms_content_id' => (int)$contentId,
@@ -55,9 +58,15 @@ class ContentBirdApiService {
 		return $response;
 	}
 
-	public function createRequest($method, $endpoint, $body) {
-
-		$token = $this->container->getParameter(self::token);
+	/**
+	 * @param $method
+	 * @param $endpoint
+	 * @param $body
+	 * @return bool|mixed
+	 * @throws \GuzzleHttp\Exception\GuzzleException
+	 */
+	public function createRequest($method, $endpoint, $body)
+	{
 		$token = $this->getTokenPlugin();
 
 		$headers = [
@@ -65,32 +74,42 @@ class ContentBirdApiService {
 			'Accept' => 'application/json'
 		];
 
-		$instance = $this->getInstanceFromToken($this->container->getParameter(self::token));
+		$instance = $this->getInstanceFromToken($this->container->getParameter(self::TOKEN));
 
 		try {
-            $client = new \GuzzleHttp\Client(['base_uri' => $instance['iss']]);
-            $response = $client->request($method, $endpoint, ['headers' => $headers, 'body' => $body]);
-            $responseBody = json_decode($response->getBody(), true);
-            return $responseBody;
-        } catch (\Exception $e) {
-		    echo "error";
-		    return false;
-        }
+			$client = new \GuzzleHttp\Client(['base_uri' => $instance['iss']]);
+			$response = $client->request($method, $endpoint, ['headers' => $headers, 'body' => $body]);
+			$responseBody = json_decode($response->getBody(), true);
+			return $responseBody;
+		} catch (\Exception $e) {
+			echo "error";
+			return false;
+		}
 	}
 
-	public function getTokenPlugin() {
-		$instance = $this->getInstanceFromToken($this->container->getParameter(self::token));
+	/**
+	 * @return mixed
+	 * @throws \GuzzleHttp\Exception\GuzzleException
+	 */
+	public function getTokenPlugin()
+	{
+		$instance = $this->getInstanceFromToken($this->container->getParameter(self::TOKEN));
 		$client = new \GuzzleHttp\Client(['base_uri' => $instance['iss']]);
 
 		$response = $client->request('GET');
-		$token =  json_decode($response->getBody(), true);
+		$token = json_decode($response->getBody(), true);
 
 		return $token['token'];
 
 	}
 
-	private function getInstanceFromToken($token) {
-        $token_parts = explode( '.', $token );
-        return json_decode( base64_decode( $token_parts[1] ), true );
+	/**
+	 * @param $token
+	 * @return mixed
+	 */
+	private function getInstanceFromToken($token)
+	{
+		$token_parts = explode('.', $token);
+		return json_decode(base64_decode($token_parts[1]), true);
 	}
 }

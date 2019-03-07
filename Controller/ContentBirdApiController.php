@@ -2,539 +2,365 @@
 
 namespace creemedia\Bundle\eZcontentbirdBundle\Controller;
 
-use eZ\Publish\API\Repository\Values\Content\LocationQuery;
-use eZ\Publish\API\Repository\Values\Content\Query;
-use eZ\Publish\API\Repository\Values\Content\Query\Criterion;
-use eZ\Publish\API\Repository\Values\Content\Query\SortClause;
-use eZ\Publish\Core\MVC\Symfony\View\ContentView;
+use DOMDocument;
+
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use eZ\Publish\API\Repository\Repository;
-use Symfony\Component\DependencyInjection\Definition;
 use eZ\Bundle\EzPublishCoreBundle\Controller;
-use CM\ExtendedImageBundle\eZ\Publish\FieldType\ExtendedImage\Value;
-use DOMDocument;
-use eZ\Publish\API\Repository\Values\Content;
+use CM\eZcontentbirdBundle\Helper\TagParser;
 
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
+use CM\eZcontentbirdBundle\Helper\ImageHelper as ImageHelper;
 
 class ContentBirdApiController extends Controller
 {
-    private $apiService;
-    private $contentBirdService;
-    private $parser;
-    private $url;
-
-    const token = 'contentbird.token';
-    const PLUGIN_VERSION = '0.6';
-    const IMAGE_LOCATION_TO_UPLOAD = '274569';
-
-    /** Status and error codes */
-    const STATUS_OKAY = 0;
-    const ERROR_NO_TITLE_GIVEN = 1;
-    const ERROR_NO_CONTENT_GIVEN = 2;
-    const ERROR_NO_AUTHOR_GIVEN = 3;
-    const ERROR_NO_STATUS_GIVEN = 4;
-    const ERROR_UNKNOWN_POST_TYPE = 5;
-    const ERROR_UNKNOWN_POST_CATEGORY = 6;
-    const ERROR_CREATE_USER = 7;
-    const ERROR_USER_PERMISSION_DENIED = 8;
-    const ERROR_USER_NOT_FOUND = 9;
-    const ERROR_PUBLISH_POST = 10;
-    const ERROR_OBJECT_INVALID = 11;
-    const ERROR_UNKNOWN_METHOD = 12;
-    const ERROR_NOT_FOUND = 13;
-    const ERROR_GENERAL = 14;
-    const ERROR_NO_BODY = 15;
-
-    public function __construct(Container $container, Repository $repository)
-    {
-        $this->repository = $repository;
-        $this->container = $container;
-        $this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
-        $this->parser = $this->container->get('cmcontentbirdconnector.service.parser');
-    }
-
-    public function activateAction(Request $request)
-    {
-        $host = $request->headers->get('x-forwarded-host') ? preg_replace('/,.*$/', '', $request->headers->get('x-forwarded-host')) : $request->getHost();
-        $proto = $request->isSecure() ? 'https://' : 'http://';
-        $this->contentBirdService->pluginStatus($proto . $host);
-        $this->url = $proto . $host;
-
-        return new Response();
-    }
-
-    private function handleResponse($payload, $statusCode = null)
-    {
-        $response = new JsonResponse();
-
-        if ($payload) {
-            $response->setData($payload);
-        }
-        if ($statusCode) {
-            $response->setStatusCode($statusCode);
-        }
-        return $response;
-    }
-
-    private function validateContentCreate($data)
-    {
-        if (empty($data)) {
-            return $this->handleResponse(['message' => 'Invalid content data object', 'code' => self::ERROR_OBJECT_INVALID], 422);
-        }
-
-        if (empty($data['post_title'])) {
-            return $this->handleResponse(['message' => 'No title given', 'code' => self::ERROR_NO_TITLE_GIVEN], 422);
-        }
-
-        if (empty($data['post_content'])) {
-            return $this->handleResponse(['message' => 'Invalid content data object', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
-        }
-
-        return 0;
-    }
-
-    public function handleAction(Request $request)
-    {
-
-        $errorResponse = null;
-
-        if (!$request->query->has('token')) {
-            return $this->handleResponse(['message' => 'Token wurde nicht gesetzt', 'code' => self::ERROR_GENERAL], 422);
-        }
-
-        if (!$request->query->has('lbcm')) {
-            return $this->handleResponse(['message' => 'lbcm/action wurde niht gesetzt', 'code' => self::ERROR_GENERAL], 405);
-        }
-
-        $token = $request->query->get('token');
-        $action = $request->query->get('lbcm');
-
-        if ($token !== $this->container->getParameter(self::token)) {
-            return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 403);
-        }
-
-        switch ($action) {
-
-            case 'users':
-                return $this->usersAction($request);
-
-            case 'meta':
-                return $this->metaAction($request);
-
-            case 'content/create':
-                return $this->createAction($request);
-
-            case 'content/update':
-                return $this->contentUpdateAction($request);
-
-            case 'content/get':
-                return $this->getContentAction($request);
-
-            default:
-                return $this->handleResponse(['message' => 'Methode nicht gefunden', 'code' => self::ERROR_GENERAL], 404);
-        }
-    }
-
-    public function statusAction(Request $request)
-    {
-        $token = $this->container->getParameter(self::token);
-
-        $inserted = false;
-        if (strlen($token) > 0) {
-            $inserted = true;
-        }
-
-        $res = [
-            'message' => $inserted ? 'Plugin richtig installiert' : 'Plugin wurde nicht korrekt installiert',
-            'code' => $inserted ? self::STATUS_OKAY : self::ERROR_GENERAL,
-            'version' => self::PLUGIN_VERSION,
-            'token_inserted' => $inserted
-        ];
-
-        return $this->handleResponse($res, 200);
-    }
-
-    public function metaAction(Request $request)
-    {
-        $types = $this->getContentTypes();
-
-        $responseData = [
-            'meta_data' => [
-                'post_types' => $types
-            ],
-            'message' => '',
-            'code' => self::STATUS_OKAY
-        ];
-
-        return $this->handleResponse($responseData, 200);
-    }
-
-
-    public function createAction(Request $request)
-    {
-        $token = $request->query->get('token');
-        if ($token !== $this->container->getParameter(self::token)) {
-            return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
-        }
-
-        $requestData = $request->request->get('content_data');
-
-        $check = $this->validateContentCreate($requestData);
-
-        if (!is_int($check)) {
-            return $check;
-        }
-
-        $postContent;
-        $title;
-        $postStatus;
-        $meta;
-        $cmsUserId;
-        $postType;
-        $publishDate;
-        $keywords = [];
-
-        if (!empty($requestData['post_title'])) {
-            $title = $requestData['post_title'];
-        }
-
-        if (!empty($requestData['post_content'])) {
-            $postContent = $requestData['post_content'];
-        }
-
-        if (!empty($requestData['post_status'])) {
-            $postStatus = $requestData['post_status'];
-        }
-
-        if (!empty($requestData['post_meta'])) {
-            if (!empty($requestData['post_meta']['cms_user_id'])) {
-                $cmsUserId = $requestData['post_meta']['cms_user_id'];
-            }
-
-            if (!empty($requestData['post_meta']['cms_post_type'])) {
-                $postType = $requestData['post_meta']['cms_post_type'];
-            }
-        }
-
-        if (!empty($requestData['keywords'])) {
-            $keywords = array_values($requestData['keywords']);
-        }
-
-        if (empty($title) || empty($postContent) || empty($cmsUserId) || empty($postType)) {
-            return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
-        }
-
-        $postContent = $this->handleImagesAndClearHTML($postContent);
-
-        $postContent = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent . '</section>';
-
-        $content = $this->createContent($postType, $title, $postContent, 'draft', $cmsUserId, $keywords);
-
-        $res = [
-            'code' => self::STATUS_OKAY,
-            array('message' => ''),
-            'cms_content_id' => $content->id
-        ];
-
-        return $this->handleResponse($res, 200);
-    }
-
-    public function getContentAction(Request $request)
-    {
-
-        $token = $request->query->get('token');
-
-        if ($token !== $this->container->getParameter(self::token)) {
-            return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
-        }
-
-        $contentService = $this->repository->getContentService();
-        $userService = $this->repository->getUserService();
-
-        if (!$request->query->has('cms_content_id')) {
-            return $this->handleResponse(['message' => 'Content wurde nicht angegeben!!', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
-        }
-
-        $contentId = $request->query->get('cms_content_id');
-
-        $contentInfo = $contentService->loadContentInfo($contentId);
-        $userId = $userService->loadUser($contentInfo->ownerId);
-        $this->repository->setCurrentUser($userId);
-        $content = $contentService->loadContent($contentId);
-
-        $title = $content->getField('title')->value;
-        $body = $content->getField('text')->value;
-
-        $parsed = $this->parser->parse($body);
-
-        $res = [
-            'code' => self::STATUS_OKAY,
-            'message' => '',
-            'content' => [
-                'title' => (string)$title,
-                'content' => $parsed
-            ]
-        ];
-
-        return $this->handleResponse($res, 200);
-    }
-
-    public function contentUpdateAction(Request $request)
-    {
-        libxml_use_internal_errors(true);
-        $token = $request->query->get('token');
-
-        if ($token !== $this->container->getParameter(self::token)) {
-            return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
-        }
-
-        $contentId;
-        $postContent;
-        $title;
-        $keywords = [];
-
-        if ($request->request->has('cms_content_id')) {
-            $contentId = $request->request->get('cms_content_id');
-        }
-
-        if ($request->request->has('post_content')) {
-            $postContent = $request->request->get('post_content');
-        }
-
-        if ($request->request->has('post_title')) {
-            $title = $request->request->get('post_title');
-        }
-
-        if ($request->request->has('keywords')) {
-            $keywords = $request->request->get('keywords');
-        }
-
-        if (empty ($contentId) || empty ($title) || empty ($postContent)) {
-            return $this->handleResponse(['message' => 'No Content given', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
-        }
-
-        $postContent = $this->handleImagesAndClearHTML($postContent);
-
-        $html = '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit">' . $postContent . '</section>';
-
-        $content = $this->updateContent($contentId, $html, $title, $keywords);
-
-        $res = array(
-            'code' => self::STATUS_OKAY,
-            ['message' => ''],
-            'cms_content_id' => $content->id
-        );
-
-        return $this->handleResponse($res, 200);
-    }
-
-
-    private function createContent($contentType, $title, $text, $post_status, $userId, $keywords)
-    {
-        $contentService = $this->repository->getContentService();
-        $locationService = $this->repository->getLocationService();
-        $contentTypeService = $this->repository->getContentTypeService();
-        $userService = $this->repository->getUserService();
-
-        $user = $userService->loadUser($userId);
-        $this->repository->setCurrentUser($user);
-
-        $contentType = $contentTypeService->loadContentTypeByIdentifier($contentType);
-        $contentCreateStruct = $contentService->newContentCreateStruct($contentType, 'eng-GB');
-
-        if (!empty($keywords)) {
-            $contentCreateStruct->setField('cb_keywords', implode(';', $keywords));
-        }
-
-        $contentCreateStruct->setField('title', $title);
-        $contentCreateStruct->setField('text', $text);
-
-        $locationCreateStruct = $locationService->newLocationCreateStruct(2); // later dynamic...
-
-        $draft = $contentService->createContent($contentCreateStruct, array($locationCreateStruct));
-
-        return $draft;
-    }
-
-    private function getContentTypes()
-    {
-        $contentTypeService = $this->repository->getContentTypeService();
-        $contentGroup = $contentTypeService->loadContentTypeGroup(1);
-        $contentTypes = $contentTypeService->loadContentTypes($contentGroup);
-
-        $types = [];
-
-        for ($i = 0; $i < count($contentTypes); $i++) {
-            $typ = $contentTypes[$i]->identifier;
-            $typ = ['name' => $typ, 'label' => $typ];
-
-            array_push($types, $typ);
-        }
-
-        return $types;
-    }
-
-    private function updateContent($contentId, $newBody, $newTitle, $keywords)
-    {
-        $repository = $this->container->get('ezpublish.api.repository');
-        $contentService = $this->repository->getContentService();
-        $userService = $this->repository->getUserService();
-
-        $contentInfo = $contentService->loadContentInfo($contentId);
-        $userId = $userService->loadUser($contentInfo->ownerId);
-        $this->repository->setCurrentUser($userId);
-
-        if ($contentInfo->isPublished()) {
-            $contentDraft = $contentService->createContentDraft($contentInfo);
-        } else if ($contentInfo->isDraft()) {
-            $versionInfo = $contentService->loadVersionInfoById($contentId);
-        }
-
-        $contentUpdateStruct = $contentService->newContentUpdateStruct();
-        $contentUpdateStruct->initialLanguageCode = 'eng-GB';
-
-        if ($newTitle) {
-            $contentUpdateStruct->setField('title', $newTitle);
-        }
-
-        if (!empty($keywords)) {
-            $contentUpdateStruct->setField('cb_keywords', implode(';', $keywords));
-        } else {
-            $contentUpdateStruct->setField('cb_keywords', '');
-        }
-
-        $contentUpdateStruct->setField('text', $newBody);
-
-        if ($contentInfo->isPublished()) {
-            $contentDraft = $contentService->updateContent($contentDraft->versionInfo, $contentUpdateStruct);
-        } else if ($contentInfo->isDraft()) {
-            $contentDraft = $contentService->updateContent($versionInfo, $contentUpdateStruct);
-        }
-        return $contentDraft;
-    }
-
-    public function usersAction(Request $request)
-    {
-        $token = $request->query->get('token');
-
-        if ($token !== $this->container->getParameter(self::token)) {
-            return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
-        }
-
-        $this->setCurrentUserAdmin();
-
-        $query = new Query();
-        $query->filter = new Criterion\LogicalAnd([
-            new Criterion\ContentId([172776, 172749, 202610])
-        ]);
-
-        $usersContent = array_map(function ($hit) {
-            return $hit->valueObject;
-        }, $this->repository->getSearchService()->findContent($query)->searchHits);
-
-        $users = [];
-
-        foreach ($usersContent as $value) {
-
-            $users[$value->getFieldValue('user_account')->contentId] =
-                [
-                    'display_name' => $value->getFieldValue('first_name')->text,
-                    'email' => $value->getFieldValue('user_account')->email
-                ];
-        }
-
-        $users = ['users' => $users, 'message' => '', 'code' => '0'];
-
-        return $this->handleResponse($users, 200);
-    }
-
-    private function setCurrentUserAdmin()
-    {
-        $userService = $this->repository->getUserService();
-        $administratorUser = $userService->loadUser(14);
-        $this->repository->setCurrentUser($administratorUser);
-    }
-
-    private function uploadImage($image, $imageName, $fileName, $alternativeText)
-    {
-        $repository = $this->container->get('ezpublish.api.repository');
-        $contentService = $repository->getContentService();
-        $locationService = $repository->getLocationService();
-        $contentTypeService = $repository->getContentTypeService();
-        $repository->setCurrentUser($repository->getUserService()->loadUser(14));
-        $contentType = $contentTypeService->loadContentTypeByIdentifier("image");
-        $contentCreateStruct = $contentService->newContentCreateStruct($contentType, 'eng-GB');
-
-        $contentCreateStruct->setField('name', $fileName);
-
-        $value = new Value(
-            [
-                'path' => $imageName,
-                'fileSize' => filesize($imageName),
-                'fileName' => $fileName,
-                'alternativeText' => $alternativeText,
-            ]
-        );
-        $contentCreateStruct->setField('image', $value);
-        $draft = $contentService->createContent(
-            $contentCreateStruct,
-            [$locationService->newLocationCreateStruct(self::IMAGE_LOCATION_TO_UPLOAD)]
-
-        );
-        $content = $contentService->publishVersion($draft->versionInfo);
-
-        $id = $content->id;
-
-        return $id;
-    }
-
-    private function handleImagesAndClearHTML($html)
-    {
-        $html = str_replace('<div>', '<p>', $html);
-        $html = str_replace('</div>', '</p>', $html);
-        $html = str_replace('&amp', '&amp;', $html);
-        $html = str_replace('&', '&amp;', $html);
-        $html = str_replace('<div', '<p', $html);
-
-        $doc = new DOMDocument('1.0', 'utf-8');
-        $doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
-        $path = $this->container->get('kernel')->getRootDir() . '/../web/var/storage/image.jpg';
-        $elements = $doc->getElementsByTagName('img');
-
-        for ($i = $elements->length - 1; $i >= 0; $i--) {
-            $tag = $elements->item($i);
-            $src = $tag->getAttribute('src');
-            $alt = $tag->getAttribute('alt');
-            $title = basename($src);
-            $image = file_get_contents($src);
-            $fp = fopen($path, "w");
-            fwrite($fp, $image);
-            fclose($fp);
-            $contentId = $this->uploadImage(null, $path, $title, $alt);
-            $ezEmbed = '<div data-ezelement="ezembed" data-href="ezcontent://' . $contentId . '" data-ezview="embed"/>';
-            $nodeDiv = $doc->createTextNode($ezEmbed);
-            $tag->parentNode->replaceChild($nodeDiv, $tag);
-
-            if ($nodeDiv->parentNode->tagName === 'strong' && !empty($nodeDiv->parentNode->parentNode->tagName)) {
-                $nodeDiv->parentNode->parentNode->replaceChild($nodeDiv, $nodeDiv->parentNode);
-            }
-
-            if ($nodeDiv->parentNode->tagName === 'p' && !empty($nodeDiv->parentNode->parentNode->tagName)) {
-                $nodeDiv->parentNode->parentNode->replaceChild($nodeDiv, $nodeDiv->parentNode);
-            }
-            unlink($path);
-        }
-
-        $html = $doc->saveHTML(	$doc->getElementsByTagName('body')->item(0));
-        $html = str_replace('<br>', '<br />', $html);
-        $html = str_replace('id="photographer"', '', $html);
-        $html = preg_replace('#(<[a-z ]*)(style=("|\')(.*?)("|\'))([a-z ]*>)#', '\\1\\6', $html);
-        $html = html_entity_decode($html);
-
-        return $html;
-    }
+	private $contentBirdService;
+	private $parser;
+	private $url;
+	private $tagParser;
+	private $cmsService;
+	private $imagePath;
+
+	const TOKEN = 'contentbird.token';
+	const PLUGIN_VERSION = '0.8';
+
+	/** Status and error codes */
+	const STATUS_OKAY = 0;
+	const ERROR_NO_TITLE_GIVEN = 1;
+	const ERROR_NO_CONTENT_GIVEN = 2;
+	const ERROR_NO_AUTHOR_GIVEN = 3;
+	const ERROR_NO_STATUS_GIVEN = 4;
+	const ERROR_UNKNOWN_POST_TYPE = 5;
+	const ERROR_UNKNOWN_POST_CATEGORY = 6;
+	const ERROR_CREATE_USER = 7;
+	const ERROR_USER_PERMISSION_DENIED = 8;
+	const ERROR_USER_NOT_FOUND = 9;
+	const ERROR_PUBLISH_POST = 10;
+	const ERROR_OBJECT_INVALID = 11;
+	const ERROR_UNKNOWN_METHOD = 12;
+	const ERROR_NOT_FOUND = 13;
+	const ERROR_GENERAL = 14;
+	const ERROR_NO_BODY = 15;
+
+	private $imageHelper;
+	private $repository;
+	private $locationService;
+	private $searchService;
+	private $userService;
+	private $imagePathCover;
+
+	public function __construct(Container $container, Repository $repository)
+	{
+		$this->repository = $repository;
+		$this->container = $container;
+		$this->locationService = $this->repository->getLocationService();
+		$this->searchService = $this->repository->getSearchService();
+		$this->userService = $this->repository->getUserService();
+		$this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
+		$this->parser = $this->container->get('cmcontentbirdconnector.service.parser');
+		$this->cmsService = $this->container->get('cmcontentbirdconnector.service.cms');
+		$this->tagParser = new TagParser();
+		$this->imageHelper = new ImageHelper();
+
+		$this->imagePath = $this->container->get('kernel')->getRootDir() . '/../web/var/storage/image.jpg';
+		$this->imagePathCover = $this->container->get('kernel')->getRootDir() . '/../web/var/storage/cover.jpg';
+	}
+
+	public function activateAction(Request $request)
+	{
+		$host = $request->headers->get('x-forwarded-host') ? preg_replace('/,.*$/', '', $request->headers->get('x-forwarded-host')) : $request->getHost();
+		$proto = $request->isSecure() ? 'https://' : 'http://';
+		$this->contentBirdService->pluginStatus($proto . $host);
+		$this->url = $proto . $host;
+
+		return new Response();
+	}
+
+	private function handleResponse($payload, $statusCode = null)
+	{
+		$response = new JsonResponse();
+
+		if ($payload) {
+			$response->setData($payload);
+		}
+		if ($statusCode) {
+			$response->setStatusCode($statusCode);
+		}
+		return $response;
+	}
+
+	public function handleAction(Request $request)
+	{
+		$errorResponse = null;
+
+		if (!$request->query->has('token')) {
+			return $this->handleResponse(['message' => 'Token wurde nicht gesetzt', 'code' => self::ERROR_GENERAL], 422);
+		}
+
+		if (!$request->query->has('lbcm')) {
+			return $this->handleResponse(['message' => 'lbcm/action wurde niht gesetzt', 'code' => self::ERROR_GENERAL], 405);
+		}
+
+		$token = $request->query->get('token');
+		$action = $request->query->get('lbcm');
+
+		if ($token !== $this->container->getParameter(self::TOKEN)) {
+			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 403);
+		}
+
+		switch ($action) {
+
+			case 'users':
+				return $this->usersAction($request);
+
+			case 'meta':
+				return $this->metaAction();
+
+			case 'content/create':
+				return $this->createAction($request);
+
+			case 'content/update':
+				return $this->contentUpdateAction($request);
+
+			case 'content/get':
+				return $this->getContentAction($request);
+
+			default:
+				return $this->handleResponse(['message' => 'Methode nicht gefunden', 'code' => self::ERROR_GENERAL], 404);
+		}
+	}
+
+	public function statusAction()
+	{
+		$token = $this->container->getParameter(self::TOKEN);
+
+		$inserted = false;
+		if (strlen($token) > 0) {
+			$inserted = true;
+		}
+
+		$res = [
+			'message' => $inserted ? 'Plugin richtig installiert' : 'Plugin wurde nicht korrekt installiert',
+			'code' => $inserted ? self::STATUS_OKAY : self::ERROR_GENERAL,
+			'version' => self::PLUGIN_VERSION,
+			'token_inserted' => $inserted
+		];
+
+		return $this->handleResponse($res, 200);
+	}
+
+	public function metaAction()
+	{
+		$types = $this->cmsService->getContentTypes();
+		$categoriesList = $this->cmsService->getAllCategories();
+
+		$categories = [];
+
+		foreach ($categoriesList as $item) {
+			$categories[] = [
+				'term_id' => $item->versionInfo->contentInfo->mainLocationId,
+				'cat_name' => ($item->versionInfo->contentInfo->contentTypeId === 14 ? 'Serie: ' : 'Ratgeber: ') . $item->getField('title')->value->text
+			];
+		}
+
+		$responseData = [
+			'meta_data' => [
+				'post_types' => $types,
+				'post_categories' => $categories
+			],
+			'message' => '',
+			'code' => self::STATUS_OKAY
+		];
+		return $this->handleResponse($responseData, 200);
+	}
+
+	private function getFieldsFromRequest($requestData)
+	{
+		$fields = [];
+
+		$fields['post_title'] = $requestData['post_title'] ?? null;
+		$fields['post_content'] = $requestData['post_content'] ?? null;
+		$fields['post_status'] = $requestData['post_status'] ?? null;
+		$fields['cms_content_id'] = $requestData['cms_content_id'] ?? null;
+		$fields['cms_user_id'] = $requestData['post_meta']['cms_user_id'] ?? null;
+		$fields['cms_post_type'] = $requestData['post_meta']['cms_post_type'] ?? null;
+		$fields['parent_location'] = $requestData['post_meta']['cms_post_categories'] ?? [2]; // fallback to home location
+		$fields['keywords'] = $requestData['keywords'] ?? [];
+		return $fields;
+	}
+
+	public function createAction(Request $request)
+	{
+		$check = $this->checkToken($request);
+		if ($check) return $check;
+
+		$requestData = $request->request->get('content_data');
+		$fields = $this->getFieldsFromRequest($requestData);
+
+		if (!$fields['post_title'] || !$fields['post_content'] || !$fields['cms_user_id'] || !$fields['cms_post_type']) {
+			return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
+		}
+
+		$fields['post_content'] = str_replace('&copy;', '', $fields['post_content']);
+		$shortCodes = $this->tagParser->parseShortCodes($fields['post_content']);
+		$this->imageHelper->handleCoverImageFromShortCodes($this->imagePathCover, $shortCodes);
+		$fields['post_content'] = $this->tagParser->clearShortCodes($fields['post_content']);
+		$fields['post_content'] = $this->handleImagesAndClearHTML($fields['post_content']);
+		$fields['post_content'] = html_entity_decode($fields['post_content']);
+
+		$content = $this->cmsService->createContent($fields['parent_location'], $fields['cms_post_type'], $fields['post_title'], $fields['post_content'], 'draft', $fields['cms_user_id'], $fields['keywords'], $shortCodes);
+
+		$res = [
+			'code' => self::STATUS_OKAY, ['message' => ''], 'cms_content_id' => $content->id
+		];
+
+		return $this->handleResponse($res, 200);
+	}
+
+	public function getContentAction(Request $request)
+	{
+		$check = $this->checkToken($request);
+		if ($check) return $check;
+
+		$contentService = $this->repository->getContentService();
+		$userService = $this->repository->getUserService();
+
+		if (!$request->query->has('cms_content_id')) {
+			return $this->handleResponse(['message' => 'Content wurde nicht angegeben!!', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
+		}
+
+		$contentId = $request->query->get('cms_content_id');
+
+		$contentInfo = $contentService->loadContentInfo($contentId);
+		$userId = $userService->loadUser($contentInfo->ownerId);
+		$this->repository->setCurrentUser($userId);
+		$content = $contentService->loadContent($contentId);
+
+		$title = $content->getField('title')->value;
+		$body = $content->getField('text')->value;
+
+		$parsed = $this->parser->parse($body);
+
+		$res = [
+			'code' => self::STATUS_OKAY,
+			'message' => '',
+			'content' => [
+				'title' => (string)$title,
+				'content' => $parsed
+			]
+		];
+
+		return $this->handleResponse($res, 200);
+	}
+
+	public function contentUpdateAction(Request $request)
+	{
+		$check = $this->checkToken($request);
+		if ($check) return $check;
+
+		$fields['post_title'] = $request->request->get('post_title') ?? null;
+		$fields['post_content'] = $request->request->get('post_content') ?? null;
+		$fields['cms_content_id'] = $request->request->get('cms_content_id') ?? null;
+		$fields['keywords'] = $request->request->get('keywords') ?? [];
+
+		if (!$fields['post_title'] || !$fields['post_content'] || !$fields['cms_content_id']) {
+			return $this->handleResponse(['message' => '', 'code' => self::ERROR_NO_CONTENT_GIVEN], 422);
+		}
+
+		$fields['post_content'] = str_replace('&copy;', '', $fields['post_content']);
+		$shortCodes = $this->tagParser->parseShortCodes($fields['post_content']);
+		$this->imageHelper->handleCoverImageFromShortCodes($this->imagePathCover, $shortCodes);
+		$fields['post_content'] = $this->tagParser->clearShortCodes($fields['post_content']);
+		$fields['post_content'] = $this->handleImagesAndClearHTML($fields['post_content']);
+		$fields['post_content'] = html_entity_decode($fields['post_content']);
+
+		$content = $this->cmsService->updateContent($fields['cms_content_id'], $fields['post_content'], $fields['post_title'], $fields['keywords'], $shortCodes);
+
+		$res = [
+			'code' => self::STATUS_OKAY,
+			['message' => ''],
+			'cms_content_id' => $content->id
+		];
+
+		return $this->handleResponse($res, 200);
+	}
+
+	private function checkToken(Request $request)
+	{
+		$token = $request->query->get('token');
+
+		if ($token !== $this->container->getParameter(self::TOKEN)) {
+			return $this->handleResponse(['message' => 'Token ist nicht korrekt', 'code' => self::ERROR_GENERAL], 422);
+		}
+		return null;
+	}
+
+	public function usersAction(Request $request)
+	{
+		$check = $this->checkToken($request);
+		if ($check) return $check;
+
+		$this->repository->setCurrentUser($this->userService->loadUser(14));// only admin can do the next
+
+		$usersContent = $this->cmsService->getUsers();
+
+		$users = [];
+
+		foreach ($usersContent as $value) {
+
+			$users[$value->getFieldValue('user_account')->contentId] =
+				[
+					'display_name' => $value->getFieldValue('first_name')->text,
+					'email' => $value->getFieldValue('user_account')->email
+				];
+		}
+
+		$users = ['users' => $users, 'message' => '', 'code' => '0'];
+
+		return $this->handleResponse($users, 200);
+	}
+
+	private function handleImagesAndClearHTML($html)
+	{
+		$html = str_replace(['<div>', '</div>', '<div'], ['<p>', '</p>', '<p'], $html);
+
+		$html = $this->parseImages($html);
+
+		$html = str_replace('<br>', '<br />', $html);
+		$html = str_replace('id="photographer"', '', $html);
+		$html = preg_replace('#(<[a-z]*)(style=("|\')(.*?)("|\'))([a-z]*>)#', '\\1\\6', $html);
+		$html = preg_replace('/ style=("|\')(.*?)("|\')/', '', $html);
+		return $html;
+	}
+
+	private function parseImages($html)
+	{
+		$doc = new DOMDocument('1.0', 'utf-8');
+		$doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+
+		$elements = $doc->getElementsByTagName('img');
+		$imageParsed = false;
+
+		for ($i = $elements->length - 1; $i >= 0; $i--) {
+			$tag = $elements->item($i);
+
+			$src = $tag->getAttribute('src');
+			$alt = $tag->getAttribute('alt');
+			$title = basename($src);
+
+			$this->imageHelper->downloadImageLocal($src, $this->imagePath);
+			$contentId = $this->cmsService->uploadImage($this->imagePath, $title, $alt);
+			$nodeDiv = $this->imageHelper->createEzEmbed($contentId, $doc, $tag);
+			$this->imageHelper->handleImageFallbacks($nodeDiv);
+			unlink($this->imagePath);
+			$imageParsed = true;
+		}
+
+		if ($imageParsed)
+			$html = $doc->saveHTML($doc->getElementsByTagName('body')->item(0));
+
+		return $html;
+	}
 }
