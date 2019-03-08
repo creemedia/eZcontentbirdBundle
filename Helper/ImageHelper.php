@@ -61,7 +61,6 @@ class ImageHelper
      */
     public function handleCoverImageFromShortCodes($imagePath, &$shortCodes)
     {
-        print_r($shortCodes);
         foreach ($shortCodes as &$code) {
             if ($code['name'] === 'image' && isset($code['content'])) {
                 $xpath = new DOMXPath(@DOMDocument::loadHTML($code['content']));
