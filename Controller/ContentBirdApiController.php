@@ -23,7 +23,7 @@ class ContentBirdApiController extends Controller
     private $imagePath;
 
     const TOKEN = 'contentbird.token';
-    const PLUGIN_VERSION = '0.8';
+    const PLUGIN_VERSION = '0.8.1';
 
     /** Status and error codes */
     const STATUS_OKAY = 0;
@@ -235,7 +235,9 @@ class ContentBirdApiController extends Controller
         $fields['post_content'] = $this->tagParser->clearShortCodes($fields['post_content']);
         $fields['post_content'] = $this->clearHtml($fields['post_content']);
         $fields['post_content'] = $this->parseImages($fields['post_content']);
+        $fields['post_content'] = str_replace('<br>', '<br />', $fields['post_content']);
         $fields['post_content'] = html_entity_decode($fields['post_content']);
+
         $content = $this->cmsService->createContent($fields['parent_location'], $fields['cms_post_type'], $fields['post_title'], $fields['post_content'], 'draft', $fields['cms_user_id'], $fields['keywords'], $shortCodes);
 
         $res = [
@@ -373,7 +375,6 @@ class ContentBirdApiController extends Controller
     private function clearHtml($html)
     {
         $html = str_replace(['<div>', '</div>', '<div'], ['<p>', '</p>', '<p'], $html);
-        $html = str_replace('<br>', '<br />', $html);
         $html = str_replace('id="photographer"', '', $html);
         $html = preg_replace('#(<[a-z]*)(style=("|\')(.*?)("|\'))([a-z]*>)#', '\\1\\6', $html);
         $html = preg_replace('/ style=("|\')(.*?)("|\')/', '', $html);
