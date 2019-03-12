@@ -78,7 +78,7 @@ class CmsService
     {
         foreach ($fields as $field) {
             if (in_array($field['name'], $this->allowedAdditionFields)) {
-                if ($field['name'] === 'summary') { // BEI SUMMARY MUSS es in p liegen
+                if ($field['name'] === 'summary' && isset($field['content'])) { // BEI SUMMARY MUSS es in p liegen
                     $contentCreateStruct->setField($field['name'], '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit"><p>' . $field['content'] . '</p></section>');
                 } else if (isset($field['content'])) {
                     $contentCreateStruct->setField($field['name'], $field['content']);
