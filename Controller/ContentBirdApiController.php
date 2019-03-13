@@ -23,7 +23,7 @@ class ContentBirdApiController extends Controller
     private $imagePath;
 
     const TOKEN = 'contentbird.token';
-    const PLUGIN_VERSION = '0.8.1';
+    const PLUGIN_VERSION = '0.9.0';
 
     /** Status and error codes */
     const STATUS_OKAY = 0;
@@ -232,9 +232,12 @@ class ContentBirdApiController extends Controller
         $fields['post_content'] = str_replace('&copy;', '', $fields['post_content']);
         $shortCodes = $this->tagParser->parseShortCodes($fields['post_content']);
         $this->imageHelper->handleCoverImageFromShortCodes($this->imagePathCover, $shortCodes);
-        $fields['post_content'] = $this->tagParser->clearShortCodes($fields['post_content']);
+
         $fields['post_content'] = $this->clearHtml($fields['post_content']);
+        $fields['post_content'] = $this->handleShortCodes($fields['parent_location'], $fields['post_content'], $shortCodes);
+        $fields['post_content'] = $this->tagParser->clearShortCodes($fields['post_content']);
         $fields['post_content'] = $this->parseImages($fields['post_content']);
+
         $fields['post_content'] = str_replace('<br>', '<br />', $fields['post_content']);
         $fields['post_content'] = html_entity_decode($fields['post_content']);
 
@@ -395,7 +398,6 @@ class ContentBirdApiController extends Controller
 
         for ($i = $elements->length - 1; $i >= 0; $i--) {
             $tag = $elements->item($i);
-
             $src = $tag->getAttribute('src');
             $alt = $tag->getAttribute('alt');
             $title = basename($src);
@@ -405,7 +407,7 @@ class ContentBirdApiController extends Controller
 
             $imageValue = $this->imageHelper->generateValue($src, $this->imagePath, $imageMeta);
             $contentId = $this->cmsService->uploadImage($title, $imageMeta[ImageHelper::INDEX_IMAGE_DESCRIPTION] ?? '', $imageValue);
-            $nodeDiv = $this->imageHelper->createEzEmbed($contentId, $doc, $tag);
+            $nodeDiv = $this->tagParser->createEzEmbed($contentId, $doc, $tag);
             $this->imageHelper->handleImageFallbacks($nodeDiv);
             unlink($this->imagePath);
             $imageParsed = true;
@@ -416,5 +418,25 @@ class ContentBirdApiController extends Controller
             $html = $doc->saveHTML($doc->getElementsByTagName('body')->item(0));
 
         return $html;
+    }
+
+    private function handleShortCodes($parentId, string $post_content, array $shortCodes)
+    {
+        foreach ($shortCodes as $code) {
+            switch ($code['name']) {
+                case 'quote':
+                    $id = $this->cmsService->createCite($parentId[0], $code['atts']['title'] ?? '', $code['content'] ?? '');
+                    $div = '<div data-ezelement="ezembed" data-href="ezcontent://' . $id . '" data-ezview="embed"/>';
+                    $post_content = str_replace('<p>'.$code['tag'], $div . '<p>[' . $code['name'] . ']</p>', $post_content);
+                    break;
+
+                case 'infobox':
+                    $id = $this->cmsService->createInfobox($parentId[0], $code['atts']['title'] ?? '', $code['content'] ?? '', $code['atts']['link'] ?? '');
+                    $div = '<div data-ezelement="ezembed" data-href="ezcontent://' . $id . '" data-ezview="embed"/>';
+                    $post_content = str_replace('<p>'.$code['tag'], $div . '<p>[' . $code['name'] . ']</p>', $post_content);
+                    break;
+            }
+        }
+        return $post_content;
     }
 }

@@ -41,20 +41,6 @@ class ImageHelper
     }
 
     /**
-     * @param $contentId
-     * @param $doc
-     * @param $tag
-     * @return node
-     */
-    public function createEzEmbed($contentId, $doc, &$tag)
-    {
-        $ezEmbed = '<div data-ezelement="ezembed" data-href="ezcontent://' . $contentId . '" data-ezview="embed"/>';
-        $nodeDiv = $doc->createTextNode($ezEmbed);
-        $tag->parentNode->replaceChild($nodeDiv, $tag);
-        return $nodeDiv;
-    }
-
-    /**
      * @param $imagePath
      * @param $shortCodes
      * @throws \eZ\Publish\Core\Base\Exceptions\InvalidArgumentType

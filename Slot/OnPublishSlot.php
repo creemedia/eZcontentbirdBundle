@@ -13,11 +13,13 @@ class OnPublishSlot extends BaseSlot
      * @var \eZ\Publish\API\Repository\ContentService
      */
     private $contentService;
+    private $contentMoverService;
 
     public function __construct(ContentService $contentService, Container $container)
     {
         $this->container = $container;
         $this->contentService = $contentService;
+        $this->contentMoverService = $container->get('cmcontentbirdconnector.service.mover');
     }
 
     public function receive(Signal $signal)
@@ -36,6 +38,9 @@ class OnPublishSlot extends BaseSlot
             } catch (Exception $e) {
                 // ERROR
             }
+
+            $this->contentMoverService->checkContentEmbeds($content);
+
         }
     }
 }
