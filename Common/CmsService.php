@@ -20,7 +20,7 @@ class CmsService
 
     protected $allowedAdditionFields = ['summary', 'image'];
 
-    const IMAGE_LOCATION_TO_UPLOAD = '274569';
+    const IMAGE_LOCATION_TO_UPLOAD = 274569;
     const RATGEBER_LOCATION_ID = 257441;
 
     public function __construct(Container $container, Repository $repository)
@@ -74,11 +74,16 @@ class CmsService
         return $draft;
     }
 
+    /**
+     * @param $fields
+     * @param $contentCreateStruct
+     * @return mixed
+     */
     private function handleAdditionalFields($fields, $contentCreateStruct)
     {
         foreach ($fields as $field) {
             if (in_array($field['name'], $this->allowedAdditionFields)) {
-                if ($field['name'] === 'summary' && isset($field['content'])) { // BEI SUMMARY MUSS es in p liegen
+                if ($field['name'] === 'summary' && isset($field['content'])) {
                     $contentCreateStruct->setField($field['name'], '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit"><p>' . $field['content'] . '</p></section>');
                 } else if (isset($field['content'])) {
                     $contentCreateStruct->setField($field['name'], $field['content']);
@@ -86,6 +91,44 @@ class CmsService
             }
         }
         return $contentCreateStruct;
+    }
+
+    // @todo refactor the next two functions
+    public function createCite($parentId, $title, $content)
+    {
+        $user = $this->userService->loadUser(14); // @todo use the current user
+        $this->repository->setCurrentUser($user);
+
+        $contentType = $this->contentTypeService->loadContentTypeByIdentifier('quote');
+        $contentCreateStruct = $this->contentService->newContentCreateStruct($contentType, 'eng-GB');
+
+        $contentCreateStruct->setField('title', $title);
+        $contentCreateStruct->setField('quote', $content);
+
+        $locationCreateStruct = $this->locationService->newLocationCreateStruct($parentId);
+
+        $draft = $this->contentService->createContent($contentCreateStruct, array($locationCreateStruct));
+
+        return $this->contentService->publishVersion($draft->versionInfo)->id ?? -1;
+    }
+
+    public function createInfobox($parentId, $title, $content, $link)
+    {
+        $user = $this->userService->loadUser(14); // @todo use the current user
+        $this->repository->setCurrentUser($user);
+
+        $contentType = $this->contentTypeService->loadContentTypeByIdentifier('infobox');
+        $contentCreateStruct = $this->contentService->newContentCreateStruct($contentType, 'eng-GB');
+
+        $contentCreateStruct->setField('title', $title);
+        $contentCreateStruct->setField('text', '<section xmlns="http://ez.no/namespaces/ezpublish5/xhtml5/edit"><p>'. $content . '</p></section>');
+        $contentCreateStruct->setField('link', $link);
+
+        $locationCreateStruct = $this->locationService->newLocationCreateStruct($parentId);
+
+        $draft = $this->contentService->createContent($contentCreateStruct, array($locationCreateStruct));
+
+        return $this->contentService->publishVersion($draft->versionInfo)->id ?? -1;
     }
 
     /**

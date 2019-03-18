@@ -3,7 +3,6 @@
 namespace creemedia\Bundle\eZcontentbirdBundle\Controller;
 
 use DOMDocument;
-
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -100,7 +99,7 @@ class ContentBirdApiController extends Controller
     }
 
     /**
-     * @param Request $request
+     * @param Request $reques
      * @return JsonResponse|null
      */
     public function handleAction(Request $request)
@@ -240,6 +239,7 @@ class ContentBirdApiController extends Controller
 
         $fields['post_content'] = str_replace('<br>', '<br />', $fields['post_content']);
         $fields['post_content'] = html_entity_decode($fields['post_content']);
+        $fields['post_content'] = str_replace('&', '&amp;', $fields['post_content']);
 
         $content = $this->cmsService->createContent($fields['parent_location'], $fields['cms_post_type'], $fields['post_title'], $fields['post_content'], 'draft', $fields['cms_user_id'], $fields['keywords'], $shortCodes);
 
@@ -420,7 +420,7 @@ class ContentBirdApiController extends Controller
         return $html;
     }
 
-    private function handleShortCodes($parentId, string $post_content, array $shortCodes)
+    private function handleShortCodes($parentId, $post_content, array $shortCodes)
     {
         foreach ($shortCodes as $code) {
             switch ($code['name']) {
