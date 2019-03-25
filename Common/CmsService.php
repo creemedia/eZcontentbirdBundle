@@ -224,7 +224,6 @@ class CmsService
         $query->query = new Criterion\LogicalOr([
             new Criterion\LogicalAnd([
                 new Criterion\Subtree($ratgeberMainLocation->pathString),
-                new Criterion\Visibility(Criterion\Visibility::VISIBLE),
                 new Criterion\ContentTypeIdentifier(['overview', 'dossier'])
             ])
         ]);

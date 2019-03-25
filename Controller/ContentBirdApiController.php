@@ -22,7 +22,7 @@ class ContentBirdApiController extends Controller
     private $imagePath;
 
     const TOKEN = 'contentbird.token';
-    const PLUGIN_VERSION = '0.9.0';
+    const PLUGIN_VERSION = '0.9.1';
 
     /** Status and error codes */
     const STATUS_OKAY = 0;
