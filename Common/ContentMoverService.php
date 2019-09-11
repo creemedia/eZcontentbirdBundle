@@ -4,6 +4,8 @@ namespace creemedia\Bundle\eZcontentbirdBundle\Common;
 
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
 use eZ\Publish\API\Repository\Repository;
+use eZ\Publish\API\Repository\Exceptions\NotFoundException;
+use eZ\Publish\API\Repository\Exceptions\UnauthorizedException;
 
 class ContentMoverService
 {
@@ -35,7 +37,12 @@ class ContentMoverService
         foreach ($embeds as $embed) {
             $attr = $embed->getAttribute('xlink:href');
             $contentId = substr(strrchr($attr, "//"), 1);
-            $content = $this->contentService->loadContent($contentId);
+            try {
+                $content = $this->contentService->loadContent($contentId);
+            } catch (NotFoundException $e) {
+                continue;
+            }
+
             $location = $this->locationService->loadLocation($content->versionInfo->contentInfo->mainLocationId);
 
             if ($location->parentLocationId !== $contentLocationId) {
@@ -46,6 +53,6 @@ class ContentMoverService
 
     private function move($srcLocation, $destinationParentLocation)
     {
-        $this->locationService->moveSubtree( $srcLocation, $destinationParentLocation );
+        $this->locationService->moveSubtree($srcLocation, $destinationParentLocation);
     }
 }
