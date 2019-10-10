@@ -2,25 +2,26 @@
 
 namespace creemedia\Bundle\eZcontentbirdBundle\Common;
 
+use eZ\Publish\API\Repository\Exceptions\NotFoundException;
+use eZ\Publish\API\Repository\Exceptions\UnauthorizedException;
+use eZ\Publish\Core\Repository\Values\Content\Content;
 use Symfony\Component\DependencyInjection\ContainerInterface as Container;
 use eZ\Publish\API\Repository\Repository;
-use eZ\Publish\API\Repository\Values\Content\LocationQuery;
-use eZ\Publish\API\Repository\Values\Content\Query;
-use eZ\Publish\API\Repository\Values\Content\Query\Criterion;
-use eZ\Publish\API\Repository\Values\Content\Query\SortClause;
-use GuzzleHttp\Client;
+use Symfony\Component\Routing\RouterInterface;
 
 class ContentBirdApiService
 {
 	private $container;
 	private $repository;
+	private $router;
 
 	const TOKEN = 'contentbird.token';
 
-	public function __construct(Container $container, Repository $repository)
+	public function __construct(Container $container, Repository $repository, RouterInterface $router)
 	{
 		$this->container = $container;
 		$this->repository = $repository;
+		$this->router = $router;
 	}
 
 	public function pluginStatus($url)
@@ -41,12 +42,45 @@ class ContentBirdApiService
 		return $response;
 	}
 
+	private function pathCount($pathString)
+	{
+		return count(explode('/', $pathString));
+	}
+
+	public function getMainLocation($contentInfo)
+	{
+		$locations = $this->repository->getLocationService()->loadLocations($contentInfo);
+		$mainLocation = $this->repository->getLocationService()->loadLocation($contentInfo->mainLocationId);
+
+		if (count($locations) > 1 && $this->pathCount($mainLocation->pathString) > 7) {
+			foreach ($locations as $location) {
+				if ($this->pathCount($location->pathString) < $this->pathCount($mainLocation->pathString)) {
+					$mainLocation = $location;
+				}
+			}
+		}
+
+		return $mainLocation;
+	}
+
 	public function contentStatus($contentId, $date, $status)
 	{
+		/** @var Content $content */
+		try {
+			$content = $this->repository->getContentService()->loadContent($contentId);
+			$location = $this->repository->getLocationService()->loadLocation($content->contentInfo->mainLocationId);
+			$location = $this->getMainLocation($location->getContentInfo());
+		} catch (NotFoundException $e) {
+			return null;
+		}
+
+		$url = $this->router->generate($location, [], false);
+
+		$url = str_replace("/admin", $this->container->getParameter('www.host'), $url);
 
 		$body = [
 			'cms_content_id' => (int)$contentId,
-			'content_url' => 'no-url',
+			'content_url' => $url,
 			'content_published_date' => $date,
 			'content_status' => $status,
 			'future_post' => false

@@ -36,7 +36,7 @@ class OnPublishSlot extends BaseSlot
                 $this->contentBirdService = $this->container->get('cmcontentbirdconnector.service.api');
                 $this->contentBirdService->contentStatus($signal->contentId, date("Y-m-d"), 'published');
             } catch (Exception $e) {
-                // ERROR
+                // TODO ERROR
             }
 
             $this->contentMoverService->checkContentEmbeds($content);
