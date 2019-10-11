@@ -114,6 +114,10 @@ class CmsService
 
     public function createInfobox($parentId, $title, $content, $link)
     {
+        if ($link == 'link') {
+            $link = '';
+        }
+
         $user = $this->userService->loadUser(14); // @todo use the current user
         $this->repository->setCurrentUser($user);
 
