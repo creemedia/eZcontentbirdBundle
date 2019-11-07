@@ -10,6 +10,10 @@ services:
         class: creemedia\Bundle\eZcontentbirdBundle\Common\CmsService
         arguments: ['@service_container', '@ezpublish.api.repository']
 
+    cmcontentbirdconnector.service.database:
+        class: creemedia\Bundle\eZcontentbirdBundle\Common\DatabaseService
+        arguments: ['@service_container', '@ezpublish.api.repository']
+
     cmcontentbirdconnector.service.mover:
         class: creemedia\Bundle\eZcontentbirdBundle\Common\ContentMoverService
         arguments: ['@service_container', '@ezpublish.api.repository']

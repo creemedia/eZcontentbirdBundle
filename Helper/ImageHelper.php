@@ -58,6 +58,7 @@ class ImageHelper
 
                 $value = $this->generateValue($src,$imagePath, $imageMeta);
                 $code['content'] = $value;
+                $code['src_alt'] = $src . ';'.$alt;
             }
         }
     }
