@@ -22,7 +22,7 @@ class ContentBirdApiController extends Controller
 	private $imagePath;
 
 	const TOKEN = 'contentbird.token';
-	const PLUGIN_VERSION = '0.9.1';
+	const PLUGIN_VERSION = '0.9.2';
 
 	/** Status and error codes */
 	const STATUS_OKAY = 0;
@@ -220,8 +220,8 @@ class ContentBirdApiController extends Controller
 	 */
 	public function createAction(Request $request)
 	{
-		//$check = $this->checkToken($request);
-		//if ($check) return $check;
+		$check = $this->checkToken($request);
+		if ($check) return $check;
 
 		$requestData = $request->request->get('content_data');
 		$fields = $this->getFieldsFromRequest($requestData);
