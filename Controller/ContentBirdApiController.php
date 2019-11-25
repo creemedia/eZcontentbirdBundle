@@ -40,9 +40,8 @@ class ContentBirdApiController extends Controller
 	const ERROR_UNKNOWN_METHOD = 12;
 	const ERROR_NOT_FOUND = 13;
 	const ERROR_GENERAL = 14;
-	const ERROR_NO_BODY = 15;
 
-	private $imageHelper;
+    private $imageHelper;
 	private $repository;
 	private $locationService;
 	private $searchService;
@@ -106,6 +105,10 @@ class ContentBirdApiController extends Controller
 	 */
 	public function handleAction(Request $request)
 	{
+        $file = fopen($this->container->get('kernel')->getRootDir() . '/../web/var/storage/contentbirdv2.txt', 'a+');
+        fwrite($file, $request->getContent());
+        fclose($file);
+
 		$errorResponse = null;
 
 		if (!$request->query->has('token')) {

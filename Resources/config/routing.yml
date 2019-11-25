@@ -31,7 +31,7 @@ cm_content_bird_connector.status:
 cm_content_bord_connector.handle:
     path: /contentbird/
     defaults: {_controller: cmcontentbirdconnector.controller_api:handleAction }
-    methods: [GET, POST]
+    methods: [GET, POST, PUT]
 
 cm_content_bord_connector.activate:
     path: /contentbird/activate
